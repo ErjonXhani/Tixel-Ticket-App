@@ -1,10 +1,10 @@
-
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/ui/logo";
+import { toast } from "sonner";
 
 const SignupScreen = () => {
   const [name, setName] = useState("");
@@ -17,6 +17,12 @@ const SignupScreen = () => {
     e.preventDefault();
     
     if (!name || !email || !password) {
+      toast.error("Please fill out all fields");
+      return;
+    }
+    
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters long");
       return;
     }
     

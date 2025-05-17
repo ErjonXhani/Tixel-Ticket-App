@@ -1,22 +1,22 @@
-
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/ui/logo";
+import { toast } from "sonner";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
+      toast.error("Please enter both email and password");
       return;
     }
     
@@ -115,7 +115,7 @@ const LoginScreen = () => {
         <button 
           onClick={() => {
             setEmail("admin@example.com");
-            setPassword("password");
+            setPassword("password123");
           }}
           className="hover:underline"
         >

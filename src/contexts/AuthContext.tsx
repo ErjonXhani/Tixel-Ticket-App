@@ -2,108 +2,147 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { Session, User } from "@supabase/supabase-js";
 
 // Types
-interface User {
-  id: number;
-  name: string;
-  email: string;
+interface AuthUser {
+  id: string;
+  name: string | null;
+  email: string | null;
   role: "user" | "admin";
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
+  session: Session | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 // Create the context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// API URL
-const API_BASE_URL = "http://localhost/tixel-api";
+// Helper function to cleanup Supabase auth state
+const cleanupAuthState = () => {
+  // Remove standard auth tokens
+  localStorage.removeItem('supabase.auth.token');
+  // Remove all Supabase auth keys from localStorage
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('supabase.auth.') || key.includes('sb-')) {
+      localStorage.removeItem(key);
+    }
+  });
+  // Remove from sessionStorage if in use
+  Object.keys(sessionStorage || {}).forEach((key) => {
+    if (key.startsWith('supabase.auth.') || key.includes('sb-')) {
+      sessionStorage.removeItem(key);
+    }
+  });
+};
+
+// Helper to transform Supabase User to AuthUser
+const transformUser = (user: User | null): AuthUser | null => {
+  if (!user) return null;
+  
+  // Check if email contains 'admin' to determine role (simplistic approach)
+  const isAdmin = user.email?.includes('admin') || false;
+  
+  return {
+    id: user.id,
+    name: user.user_metadata?.name || user.email?.split('@')[0] || null,
+    email: user.email,
+    role: isAdmin ? "admin" : "user",
+  };
+};
 
 // Provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Check if we have a stored token on initial load
+  // Initialize auth state
   useEffect(() => {
-    const checkAuth = async () => {
-      const storedUser = localStorage.getItem("tixel_user");
-      
-      if (storedUser) {
-        try {
-          // In a real app, we would validate the token with the server
-          const userData = JSON.parse(storedUser);
-          setUser(userData);
-          
-          // If we're on login/signup/splash screens and already logged in, redirect to home
-          if (["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
-            navigate("/home");
-          }
-        } catch (error) {
-          console.error("Failed to parse stored user data:", error);
-          localStorage.removeItem("tixel_user");
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, newSession) => {
+        console.log("Auth state changed:", event);
+        setSession(newSession);
+        setUser(transformUser(newSession?.user ?? null));
+        
+        // Handle sign out event
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setSession(null);
+          navigate('/login');
         }
-      } else if (!["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
+      }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
+      setUser(transformUser(currentSession?.user ?? null));
+      
+      // If we're on login/signup/splash screens and already logged in, redirect to home
+      if (currentSession && ["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
+        navigate("/home");
+      } else if (!currentSession && !["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
         // If not authenticated and not on an auth page, redirect to login
         navigate("/splash");
       }
       
       setIsLoading(false);
-    };
-    
-    checkAuth();
-  }, []);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate, location.pathname]);
 
   // Login function
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     
     try {
-      // In a real app, this would be an API call
-      // const response = await fetch(`${API_BASE_URL}/login.php`, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ email, password }),
-      // });
+      // Clean up existing auth state
+      cleanupAuthState();
       
-      // Mock login for now
-      // Simulate different roles based on email
-      const isAdmin = email.includes("admin");
+      // Attempt global sign out first
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      } catch (err) {
+        // Continue even if this fails
+      }
       
-      // Simulate success
-      const mockUser: User = {
-        id: 1,
-        name: email.split("@")[0],
+      // Sign in with Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        role: isAdmin ? "admin" : "user",
-      };
+        password,
+      });
       
-      setUser(mockUser);
-      localStorage.setItem("tixel_user", JSON.stringify(mockUser));
+      if (error) {
+        throw error;
+      }
       
-      toast.success(`Welcome back, ${mockUser.name}!`);
+      toast.success(`Welcome back, ${data.user.email?.split('@')[0]}!`);
       
       // Navigate based on role
-      if (isAdmin) {
+      if (data.user.email?.includes('admin')) {
         navigate("/admin");
       } else {
         navigate("/home");
       }
       
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed:", error);
-      toast.error("Login failed. Please check your credentials.");
+      toast.error(error.message || "Login failed. Please check your credentials.");
       return false;
     } finally {
       setIsLoading(false);
@@ -115,31 +154,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     
     try {
-      // In a real app, this would be an API call
-      // const response = await fetch(`${API_BASE_URL}/signup.php`, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ name, email, password }),
-      // });
+      // Clean up existing auth state
+      cleanupAuthState();
       
-      // Mock signup
-      const mockUser: User = {
-        id: Date.now(),
-        name,
+      // Attempt global sign out first
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      } catch (err) {
+        // Continue even if this fails
+      }
+      
+      // Sign up with Supabase
+      const { data, error } = await supabase.auth.signUp({
         email,
-        role: "user",
-      };
+        password,
+        options: {
+          data: {
+            name: name,
+          }
+        }
+      });
       
-      setUser(mockUser);
-      localStorage.setItem("tixel_user", JSON.stringify(mockUser));
+      if (error) {
+        throw error;
+      }
       
       toast.success("Account created successfully!");
-      navigate("/home");
       
+      // If email confirmation is required
+      if (data.user && !data.session) {
+        toast.info("Please check your email to confirm your account.");
+        return true;
+      }
+      
+      // If auto-confirmed
+      navigate("/home");
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Signup failed:", error);
-      toast.error("Signup failed. Please try again.");
+      toast.error(error.message || "Signup failed. Please try again.");
       return false;
     } finally {
       setIsLoading(false);
@@ -147,16 +200,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Logout function
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem("tixel_user");
-    navigate("/login");
-    toast.info("You have been logged out.");
+  const logout = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Clean up auth state
+      cleanupAuthState();
+      
+      // Attempt global sign out
+      await supabase.auth.signOut({ scope: 'global' });
+      
+      setUser(null);
+      setSession(null);
+      
+      toast.info("You have been logged out.");
+      navigate("/login");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      toast.error("Logout failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Context value
   const value = {
     user,
+    session,
     isAuthenticated: !!user,
     isAdmin: user?.role === "admin",
     isLoading,
