@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Calendar, MapPin } from "lucide-react";
@@ -7,7 +8,7 @@ import { toast } from "sonner";
 import Logo from "@/components/ui/logo";
 
 interface Event {
-  id: number;
+  event_id: number;
   title: string;
   location: string;
   date: string;
@@ -33,7 +34,7 @@ const HomeScreen = () => {
       setIsLoading(true);
       try {
         const { data, error } = await supabase
-          .from("events")
+          .from("Events")
           .select("*");
           
         if (error) {
@@ -41,18 +42,17 @@ const HomeScreen = () => {
         }
         
         // Map Supabase data to our Event interface
-        // For now, we'll use placeholder images until real images are added to Supabase
         const formattedEvents = data.map((event) => ({
-          id: event.id,
+          event_id: event.event_id,
           title: event.title,
-          location: event.location,
-          date: new Date(event.date).toLocaleDateString("en-US", { 
+          location: event.organizer_name || "Location not specified",
+          date: new Date(event.event_date).toLocaleDateString("en-US", { 
             month: "short", 
             day: "numeric", 
             year: "numeric" 
           }),
-          imageUrl: `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000)}?w=800&auto=format&fit=crop`,
-          category: ["Music", "Sports", "Arts"][Math.floor(Math.random() * 3)], // Random category for now
+          imageUrl: event.image || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000)}?w=800&auto=format&fit=crop`,
+          category: event.category || ["Music", "Sports", "Arts"][Math.floor(Math.random() * 3)],
         }));
         
         setEvents(formattedEvents);
@@ -61,7 +61,7 @@ const HomeScreen = () => {
         // If no events in database yet, show placeholder data
         setEvents([
           {
-            id: 1,
+            event_id: 1,
             title: "Summer Music Festival",
             location: "Central Park, New York",
             date: "Jun 15, 2023",
@@ -69,7 +69,7 @@ const HomeScreen = () => {
             category: "Music",
           },
           {
-            id: 2,
+            event_id: 2,
             title: "Tech Conference 2023",
             location: "Convention Center, San Francisco",
             date: "Jul 22-24, 2023",
@@ -77,7 +77,7 @@ const HomeScreen = () => {
             category: "Arts",
           },
           {
-            id: 3,
+            event_id: 3,
             title: "Basketball Finals",
             location: "Sports Arena, Los Angeles",
             date: "Aug 10, 2023",
@@ -104,13 +104,62 @@ const HomeScreen = () => {
     }
     
     toast.info(`Searching for "${searchQuery}"...`);
-    // For a real implementation, you would search the database here
+    // For a real implementation, filter events based on search query
+    const filteredEvents = events.filter(event => 
+      event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.location.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    
+    if (filteredEvents.length > 0) {
+      setEvents(filteredEvents);
+      toast.success(`Found ${filteredEvents.length} events matching "${searchQuery}"`);
+    } else {
+      toast.error(`No events found matching "${searchQuery}"`);
+    }
   };
 
   // Filter events by category
   const filterEventsByCategory = (categoryId: string) => {
     toast.info(`Filtering by ${categoryId}`);
-    // For a real implementation, you would filter events by category here
+    // Filter events by category
+    const filteredEvents = events.filter(event => 
+      event.category.toLowerCase() === categoryId
+    );
+    
+    if (filteredEvents.length > 0) {
+      setEvents(filteredEvents);
+      toast.success(`Found ${filteredEvents.length} ${categoryId} events`);
+    } else {
+      toast.error(`No ${categoryId} events found`);
+      // If no events found, fetch all events again
+      const fetchEvents = async () => {
+        const { data, error } = await supabase
+          .from("Events")
+          .select("*");
+          
+        if (error) {
+          toast.error("Error fetching events");
+          return;
+        }
+        
+        const formattedEvents = data.map((event) => ({
+          event_id: event.event_id,
+          title: event.title,
+          location: event.organizer_name || "Location not specified",
+          date: new Date(event.event_date).toLocaleDateString("en-US", { 
+            month: "short", 
+            day: "numeric", 
+            year: "numeric" 
+          }),
+          imageUrl: event.image || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000)}?w=800&auto=format&fit=crop`,
+          category: event.category || ["Music", "Sports", "Arts"][Math.floor(Math.random() * 3)],
+        }));
+        
+        setEvents(formattedEvents);
+      };
+      
+      fetchEvents();
+    }
   };
 
   return (
@@ -135,7 +184,7 @@ const HomeScreen = () => {
               placeholder="Search events, venues..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-gray-100 rounded-full py-3 px-5 pr-12 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full bg-gray-100 rounded-full py-3 px-5 pr-12 focus:outline-none focus:ring-2 focus:ring-[#ff4b00]"
             />
             <button type="submit" className="absolute right-4 top-3">
               <svg
@@ -162,7 +211,7 @@ const HomeScreen = () => {
       <div className="mb-6">
         <div className="px-4 mb-3 flex justify-between items-center">
           <h2 className="text-lg font-bold">Categories</h2>
-          <Link to="/categories" className="text-primary text-sm">
+          <Link to="/categories" className="text-[#ff4b00] text-sm">
             See All
           </Link>
         </div>
@@ -174,7 +223,7 @@ const HomeScreen = () => {
               onClick={() => filterEventsByCategory(category.id)}
               className="flex flex-col items-center min-w-[70px]"
             >
-              <div className="w-14 h-14 rounded-full bg-primary-100 flex items-center justify-center text-2xl mb-1">
+              <div className="w-14 h-14 rounded-full bg-[#fff1eb] flex items-center justify-center text-2xl mb-1">
                 {category.icon}
               </div>
               <span className="text-sm text-gray-700">{category.name}</span>
@@ -187,21 +236,21 @@ const HomeScreen = () => {
       <div className="mb-6">
         <div className="px-4 mb-3 flex justify-between items-center">
           <h2 className="text-lg font-bold">Events</h2>
-          <Link to="/events" className="text-primary text-sm">
+          <Link to="/events" className="text-[#ff4b00] text-sm">
             See All
           </Link>
         </div>
         
         {isLoading ? (
           <div className="px-4 flex justify-center py-8">
-            <div className="w-10 h-10 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
+            <div className="w-10 h-10 border-4 border-[#ff4b00] rounded-full border-t-transparent animate-spin"></div>
           </div>
         ) : (
           <div className="flex overflow-x-auto px-4 space-x-4 pb-2 no-scrollbar">
             {events.map((event) => (
               <Link
-                key={event.id}
-                to={`/events/${event.id}`}
+                key={event.event_id}
+                to={`/events/${event.event_id}`}
                 className="min-w-[280px] block bg-white rounded-lg overflow-hidden shadow"
               >
                 <div className="relative">
@@ -210,7 +259,7 @@ const HomeScreen = () => {
                     alt={event.title}
                     className="h-36 w-full object-cover"
                   />
-                  <div className="absolute top-2 right-2 bg-primary text-white text-xs py-1 px-2 rounded">
+                  <div className="absolute top-2 right-2 bg-[#ff4b00] text-white text-xs py-1 px-2 rounded">
                     {event.category}
                   </div>
                 </div>
