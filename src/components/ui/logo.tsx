@@ -20,13 +20,13 @@ export const Logo: React.FC<LogoProps> = ({
   
   return (
     <div className={`flex items-center ${className}`}>
-      {/* Logo icon */}
-      <div className={`${sizeClasses[size]} aspect-square bg-gradient-to-br from-primary-300 to-primary flex items-center justify-center rounded-lg`}>
-        <span className="text-white font-bold" style={{ 
-          fontSize: size === "sm" ? "1.2rem" : size === "md" ? "1.8rem" : "2.4rem" 
-        }}>
-          T
-        </span>
+      {/* Logo image */}
+      <div className={`${sizeClasses[size]} aspect-square flex items-center justify-center`}>
+        <img 
+          src="/lovable-uploads/424dc4da-05e6-4b1b-8102-ea8d3348e10c.png" 
+          alt="Tixel Logo" 
+          className={`${sizeClasses[size]} object-contain`}
+        />
       </div>
       
       {/* Logo text (only for full logo) */}

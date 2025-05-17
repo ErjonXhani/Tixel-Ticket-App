@@ -26,18 +26,18 @@ export default {
 				background: 'hsl(var(--background))',
 				foreground: 'hsl(var(--foreground))',
 				primary: {
-					DEFAULT: '#9b87f5',
+					DEFAULT: '#ff4b00',  // Updated to logo color
 					foreground: '#ffffff',
-					50: '#f4f1fe',
-					100: '#e9e3fd',
-					200: '#d3c7fb',
-					300: '#b79df8',
-					400: '#9b87f5',
-					500: '#7e69ab',
-					600: '#6a5892',
-					700: '#554679',
-					800: '#403561',
-					900: '#2c2348',
+					50: '#fff5f0',
+					100: '#ffede1',
+					200: '#ffd9c2',
+					300: '#ffbf94',
+					400: '#ff9657',
+					500: '#ff4b00', // Base logo color
+					600: '#e63900',
+					700: '#cc3300',
+					800: '#a3280a',
+					900: '#862108',
 				},
 				secondary: {
 					DEFAULT: '#7E69AB',
@@ -52,7 +52,7 @@ export default {
 					foreground: 'hsl(var(--muted-foreground))'
 				},
 				accent: {
-					DEFAULT: '#F97316',
+					DEFAULT: '#ff4b00',  // Updated to logo color
 					foreground: '#ffffff'
 				},
 				popover: {

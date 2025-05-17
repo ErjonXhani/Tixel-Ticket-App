@@ -27,7 +27,7 @@ const SplashScreen = () => {
   }, [navigate, isAuthenticated]);
 
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-gradient-to-b from-primary-200 to-primary-400">
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-primary">
       <div className="animate-scale-in flex flex-col items-center">
         <Logo size="lg" type="full" className="mb-8" />
         

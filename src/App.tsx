@@ -16,6 +16,7 @@ import EventsScreen from "./pages/EventsScreen";
 import AdminScreen from "./pages/AdminScreen";
 import AdminEventForm from "./pages/AdminEventForm";
 import ProfileScreen from "./pages/ProfileScreen";
+import ResellScreen from "./pages/ResellScreen"; // New Resell screen
 
 // Contexts
 import { AuthProvider } from "./contexts/AuthContext";
@@ -54,6 +55,7 @@ const App = () => {
               <Route path="home" element={<HomeScreen />} />
               <Route path="events" element={<EventsScreen />} />
               <Route path="events/:id" element={<EventDetailsScreen />} />
+              <Route path="resell" element={<ResellScreen />} />
               <Route path="profile" element={<ProfileScreen />} />
             </Route>
             

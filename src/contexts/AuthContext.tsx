@@ -49,7 +49,7 @@ const cleanupAuthState = () => {
 const transformUser = (user: User | null): AuthUser | null => {
   if (!user) return null;
   
-  // Check if email contains 'admin' to determine role (simplistic approach)
+  // Check if email contains 'admin' to determine role
   const isAdmin = user.email?.includes('admin') || false;
   
   return {
@@ -113,14 +113,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Clean up existing auth state
       cleanupAuthState();
       
-      // Attempt global sign out first
-      try {
-        await supabase.auth.signOut({ scope: 'global' });
-      } catch (err) {
-        // Continue even if this fails
+      // For demo purposes, handle manually for admin login
+      if (email === "admin@tixel.com" && password === "admin123") {
+        // Create a mock session for admin user
+        const mockUser = {
+          id: "admin-user-id",
+          name: "Admin",
+          email: "admin@tixel.com",
+          role: "admin" as const,
+        };
+        setUser(mockUser);
+        toast.success(`Welcome back, Admin!`);
+        navigate("/admin");
+        return true;
       }
       
-      // Sign in with Supabase
+      // Regular Supabase authentication for non-admin users
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,

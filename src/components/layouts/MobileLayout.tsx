@@ -1,6 +1,6 @@
 
 import { Outlet, NavLink, useLocation } from "react-router-dom";
-import { Home, Calendar, Search, User } from "lucide-react";
+import { Home, Calendar, Search, User, ArrowRight } from "lucide-react";
 import { useEffect } from "react";
 
 const MobileLayout = () => {
@@ -38,6 +38,16 @@ const MobileLayout = () => {
         >
           <Calendar className="w-5 h-5 mb-1" />
           <span>Events</span>
+        </NavLink>
+        
+        <NavLink 
+          to="/resell" 
+          className={({isActive}) => 
+            `bottom-nav-item ${isActive ? "active" : ""}`
+          }
+        >
+          <ArrowRight className="w-5 h-5 mb-1" />
+          <span>Resell</span>
         </NavLink>
         
         <NavLink 

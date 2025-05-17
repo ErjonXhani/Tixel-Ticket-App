@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -77,7 +78,7 @@ const LoginScreen = () => {
             
             <Button
               type="submit"
-              className="w-full bg-primary hover:bg-primary-600"
+              className="w-full bg-primary hover:bg-primary-600 text-white"
               size="lg"
               disabled={isSubmitting}
             >
@@ -114,8 +115,8 @@ const LoginScreen = () => {
       <div className="mt-8 text-center text-xs text-gray-400">
         <button 
           onClick={() => {
-            setEmail("admin@example.com");
-            setPassword("password123");
+            setEmail("admin@tixel.com");
+            setPassword("admin123");
           }}
           className="hover:underline"
         >
