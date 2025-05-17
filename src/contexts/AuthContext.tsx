@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -157,7 +156,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Signup function
+  // Signup function - Updated to save user data to the users table
   const signup = async (name: string, email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     
@@ -185,6 +184,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (error) {
         throw error;
+      }
+      
+      // If we have a user, add them to the users table
+      if (data.user) {
+        // Insert the user into the users table
+        const { error: insertError } = await supabase.from('Users').insert({
+          user_id: parseInt(data.user.id.replace(/-/g, '').substring(0, 9), 16) % 1000000000, // Convert UUID to numeric ID
+          username: name.toLowerCase().replace(/\s+/g, '_'), // Create a username from name
+          email: email,
+          password_hash: 'managed_by_supabase', // We don't store the actual password hash
+          full_name: name,
+          role: 'user' // Default role is user
+        });
+        
+        if (insertError) {
+          console.error("Failed to insert user into Users table:", insertError);
+          // Note: We continue even if this fails, as the user is still created in auth
+        }
       }
       
       toast.success("Account created successfully!");

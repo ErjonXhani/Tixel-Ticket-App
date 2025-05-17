@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -96,7 +97,7 @@ const SignupScreen = () => {
             
             <Button
               type="submit"
-              className="w-full bg-primary hover:bg-primary-600"
+              className="w-full bg-[#ff4b00] hover:bg-[#e64400] text-white"
               size="lg"
               disabled={isSubmitting}
             >
@@ -106,7 +107,7 @@ const SignupScreen = () => {
           
           <div className="mt-6 text-center text-sm">
             <span className="text-gray-600">Already have an account? </span>
-            <Link to="/login" className="text-primary hover:underline font-medium">
+            <Link to="/login" className="text-[#ff4b00] hover:underline font-medium">
               Sign in
             </Link>
           </div>

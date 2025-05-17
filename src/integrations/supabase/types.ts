@@ -9,62 +9,334 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      admin: {
+      Events: {
         Row: {
-          email: string
-          id: number
-          password: string
+          category: string | null
+          description: string | null
+          event_date: string
+          event_id: number
+          image: string | null
+          organizer_name: string | null
+          title: string
+          venue_id: number | null
         }
         Insert: {
-          email: string
-          id?: number
-          password: string
+          category?: string | null
+          description?: string | null
+          event_date: string
+          event_id?: number
+          image?: string | null
+          organizer_name?: string | null
+          title: string
+          venue_id?: number | null
         }
         Update: {
-          email?: string
-          id?: number
-          password?: string
-        }
-        Relationships: []
-      }
-      events: {
-        Row: {
-          date: string
-          id: number
-          location: string
-          title: string
-        }
-        Insert: {
-          date: string
-          id?: number
-          location: string
-          title: string
-        }
-        Update: {
-          date?: string
-          id?: number
-          location?: string
+          category?: string | null
+          description?: string | null
+          event_date?: string
+          event_id?: number
+          image?: string | null
+          organizer_name?: string | null
           title?: string
+          venue_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Events_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "Venues"
+            referencedColumns: ["venue_id"]
+          },
+        ]
+      }
+      Notifications: {
+        Row: {
+          created_at: string | null
+          is_read: boolean | null
+          message: string
+          notification_id: number
+          type: string | null
+          user_id: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          is_read?: boolean | null
+          message: string
+          notification_id?: number
+          type?: string | null
+          user_id?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          is_read?: boolean | null
+          message?: string
+          notification_id?: number
+          type?: string | null
+          user_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "Users"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      ResaleListings: {
+        Row: {
+          expires_at: string | null
+          listed_by: number | null
+          resale_id: number
+          resale_price: number | null
+          resale_status: string | null
+          ticket_id: number | null
+        }
+        Insert: {
+          expires_at?: string | null
+          listed_by?: number | null
+          resale_id?: number
+          resale_price?: number | null
+          resale_status?: string | null
+          ticket_id?: number | null
+        }
+        Update: {
+          expires_at?: string | null
+          listed_by?: number | null
+          resale_id?: number
+          resale_price?: number | null
+          resale_status?: string | null
+          ticket_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ResaleListings_listed_by_fkey"
+            columns: ["listed_by"]
+            isOneToOne: false
+            referencedRelation: "Users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ResaleListings_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: true
+            referencedRelation: "Tickets"
+            referencedColumns: ["ticket_id"]
+          },
+        ]
+      }
+      SystemLogs: {
+        Row: {
+          action_type: string | null
+          description: string | null
+          log_id: number
+          timestamp: string | null
+          user_id: number | null
+        }
+        Insert: {
+          action_type?: string | null
+          description?: string | null
+          log_id?: number
+          timestamp?: string | null
+          user_id?: number | null
+        }
+        Update: {
+          action_type?: string | null
+          description?: string | null
+          log_id?: number
+          timestamp?: string | null
+          user_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "SystemLogs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "Users"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      Tickets: {
+        Row: {
+          event_id: number | null
+          owner_id: number | null
+          seat_info: string | null
+          status: string | null
+          ticket_id: number
+          ticket_type: string | null
+        }
+        Insert: {
+          event_id?: number | null
+          owner_id?: number | null
+          seat_info?: string | null
+          status?: string | null
+          ticket_id?: number
+          ticket_type?: string | null
+        }
+        Update: {
+          event_id?: number | null
+          owner_id?: number | null
+          seat_info?: string | null
+          status?: string | null
+          ticket_id?: number
+          ticket_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Tickets_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "Events"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "Tickets_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "Users"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      Transactions: {
+        Row: {
+          buyer_id: number | null
+          payment_method: string | null
+          payment_status: string | null
+          ticket_id: number | null
+          total_amount: number | null
+          transaction_id: number
+          transaction_time: string | null
+        }
+        Insert: {
+          buyer_id?: number | null
+          payment_method?: string | null
+          payment_status?: string | null
+          ticket_id?: number | null
+          total_amount?: number | null
+          transaction_id?: number
+          transaction_time?: string | null
+        }
+        Update: {
+          buyer_id?: number | null
+          payment_method?: string | null
+          payment_status?: string | null
+          ticket_id?: number | null
+          total_amount?: number | null
+          transaction_id?: number
+          transaction_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Transactions_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "Users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "Transactions_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: true
+            referencedRelation: "Tickets"
+            referencedColumns: ["ticket_id"]
+          },
+        ]
+      }
+      Users: {
+        Row: {
+          created_at: string | null
+          email: string
+          full_name: string | null
+          is_verified: boolean | null
+          password_hash: string
+          phone_number: string | null
+          role: string | null
+          user_id: number
+          username: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          is_verified?: boolean | null
+          password_hash: string
+          phone_number?: string | null
+          role?: string | null
+          user_id?: number
+          username: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          is_verified?: boolean | null
+          password_hash?: string
+          phone_number?: string | null
+          role?: string | null
+          user_id?: number
+          username?: string
         }
         Relationships: []
       }
-      user: {
+      Venues: {
         Row: {
-          email: string
-          id: number
-          password: string
+          capacity: number | null
+          description: string | null
+          location: string | null
+          name: string
+          venue_id: number
         }
         Insert: {
-          email: string
-          id?: number
-          password: string
+          capacity?: number | null
+          description?: string | null
+          location?: string | null
+          name: string
+          venue_id?: number
         }
         Update: {
-          email?: string
-          id?: number
-          password?: string
+          capacity?: number | null
+          description?: string | null
+          location?: string | null
+          name?: string
+          venue_id?: number
         }
         Relationships: []
+      }
+      Verifications: {
+        Row: {
+          doc_path: string | null
+          doc_type: string | null
+          status: string | null
+          user_id: number | null
+          verification_id: number
+        }
+        Insert: {
+          doc_path?: string | null
+          doc_type?: string | null
+          status?: string | null
+          user_id?: number | null
+          verification_id?: number
+        }
+        Update: {
+          doc_path?: string | null
+          doc_type?: string | null
+          status?: string | null
+          user_id?: number | null
+          verification_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Verifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "Users"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
     }
     Views: {
