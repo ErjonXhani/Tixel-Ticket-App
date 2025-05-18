@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Calendar, MapPin } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,10 +10,11 @@ import Logo from "@/components/ui/logo";
 interface Event {
   event_id: number;
   title: string;
-  location: string;
-  date: string;
-  imageUrl: string;
+  organizer_name: string;
+  event_date: string;
+  image: string;
   category: string;
+  description: string;
 }
 
 const categories = [
@@ -23,10 +24,14 @@ const categories = [
 ];
 
 const HomeScreen = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
+  const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryFilterActive, setCategoryFilterActive] = useState(false);
 
   // Fetch events from Supabase
   useEffect(() => {
@@ -35,57 +40,28 @@ const HomeScreen = () => {
       try {
         const { data, error } = await supabase
           .from("Events")
-          .select("*");
+          .select("*")
+          .order("event_id", { ascending: false })
+          .limit(20);
           
         if (error) {
           throw error;
         }
         
-        // Map Supabase data to our Event interface
-        const formattedEvents = data.map((event) => ({
-          event_id: event.event_id,
-          title: event.title,
-          location: event.organizer_name || "Location not specified",
-          date: new Date(event.event_date).toLocaleDateString("en-US", { 
-            month: "short", 
-            day: "numeric", 
-            year: "numeric" 
-          }),
-          imageUrl: event.image || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000)}?w=800&auto=format&fit=crop`,
-          category: event.category || ["Music", "Sports", "Arts"][Math.floor(Math.random() * 3)],
-        }));
-        
-        setEvents(formattedEvents);
+        if (data && data.length > 0) {
+          setEvents(data);
+          // Initially show only the 4 most recent events
+          setFilteredEvents(data.slice(0, 4));
+        } else {
+          toast.info("No events found in the database");
+          setEvents([]);
+          setFilteredEvents([]);
+        }
       } catch (error: any) {
         console.error("Error fetching events:", error);
-        // If no events in database yet, show placeholder data
-        setEvents([
-          {
-            event_id: 1,
-            title: "Summer Music Festival",
-            location: "Central Park, New York",
-            date: "Jun 15, 2023",
-            imageUrl: "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=800&auto=format&fit=crop",
-            category: "Music",
-          },
-          {
-            event_id: 2,
-            title: "Tech Conference 2023",
-            location: "Convention Center, San Francisco",
-            date: "Jul 22-24, 2023",
-            imageUrl: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop",
-            category: "Arts",
-          },
-          {
-            event_id: 3,
-            title: "Basketball Finals",
-            location: "Sports Arena, Los Angeles",
-            date: "Aug 10, 2023",
-            imageUrl: "https://images.unsplash.com/photo-1518640467707-6811f4a6ab73?w=800&auto=format&fit=crop",
-            category: "Sports",
-          },
-        ]);
-        toast.error("Couldn't load events from database, showing placeholder data");
+        toast.error("Couldn't load events from database");
+        setEvents([]);
+        setFilteredEvents([]);
       } finally {
         setIsLoading(false);
       }
@@ -104,61 +80,62 @@ const HomeScreen = () => {
     }
     
     toast.info(`Searching for "${searchQuery}"...`);
-    // For a real implementation, filter events based on search query
-    const filteredEvents = events.filter(event => 
+    
+    const searchResults = events.filter(event => 
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.location.toLowerCase().includes(searchQuery.toLowerCase())
+      (event.organizer_name && event.organizer_name.toLowerCase().includes(searchQuery.toLowerCase()))
     );
     
-    if (filteredEvents.length > 0) {
-      setEvents(filteredEvents);
-      toast.success(`Found ${filteredEvents.length} events matching "${searchQuery}"`);
+    if (searchResults.length > 0) {
+      setFilteredEvents(searchResults);
+      setCategoryFilterActive(true);
+      setSelectedCategory(null);
+      toast.success(`Found ${searchResults.length} events matching "${searchQuery}"`);
     } else {
+      setFilteredEvents([]);
+      setCategoryFilterActive(true);
+      setSelectedCategory(null);
       toast.error(`No events found matching "${searchQuery}"`);
     }
   };
 
   // Filter events by category
   const filterEventsByCategory = (categoryId: string) => {
-    toast.info(`Filtering by ${categoryId}`);
-    // Filter events by category
-    const filteredEvents = events.filter(event => 
-      event.category.toLowerCase() === categoryId
+    setSelectedCategory(categoryId);
+    setCategoryFilterActive(true);
+    
+    const lowerCaseCategoryId = categoryId.toLowerCase();
+    const categoryEvents = events.filter(event => 
+      event.category && event.category.toLowerCase() === lowerCaseCategoryId
     );
     
-    if (filteredEvents.length > 0) {
-      setEvents(filteredEvents);
-      toast.success(`Found ${filteredEvents.length} ${categoryId} events`);
+    if (categoryEvents.length > 0) {
+      setFilteredEvents(categoryEvents);
+      toast.success(`Showing ${categoryEvents.length} ${categoryId} events`);
     } else {
-      toast.error(`No ${categoryId} events found`);
-      // If no events found, fetch all events again
-      const fetchEvents = async () => {
-        const { data, error } = await supabase
-          .from("Events")
-          .select("*");
-          
-        if (error) {
-          toast.error("Error fetching events");
-          return;
-        }
-        
-        const formattedEvents = data.map((event) => ({
-          event_id: event.event_id,
-          title: event.title,
-          location: event.organizer_name || "Location not specified",
-          date: new Date(event.event_date).toLocaleDateString("en-US", { 
-            month: "short", 
-            day: "numeric", 
-            year: "numeric" 
-          }),
-          imageUrl: event.image || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000)}?w=800&auto=format&fit=crop`,
-          category: event.category || ["Music", "Sports", "Arts"][Math.floor(Math.random() * 3)],
-        }));
-        
-        setEvents(formattedEvents);
-      };
-      
-      fetchEvents();
+      setFilteredEvents([]);
+      toast.info(`No ${categoryId} events found`);
+    }
+  };
+  
+  // Reset filters
+  const resetFilters = () => {
+    setSelectedCategory(null);
+    setCategoryFilterActive(false);
+    setFilteredEvents(events.slice(0, 4));
+  };
+
+  // Format date for display
+  const formatEventDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", { 
+        month: "short", 
+        day: "numeric", 
+        year: "numeric" 
+      });
+    } catch (e) {
+      return dateString;
     }
   };
 
@@ -211,9 +188,12 @@ const HomeScreen = () => {
       <div className="mb-6">
         <div className="px-4 mb-3 flex justify-between items-center">
           <h2 className="text-lg font-bold">Categories</h2>
-          <Link to="/categories" className="text-[#ff4b00] text-sm">
-            See All
-          </Link>
+          <button 
+            onClick={resetFilters}
+            className={`text-[#ff4b00] text-sm ${categoryFilterActive ? 'visible' : 'invisible'}`}
+          >
+            Reset filters
+          </button>
         </div>
         
         <div className="flex overflow-x-auto px-4 space-x-4 pb-2 no-scrollbar">
@@ -221,21 +201,31 @@ const HomeScreen = () => {
             <button
               key={category.id}
               onClick={() => filterEventsByCategory(category.id)}
-              className="flex flex-col items-center min-w-[70px]"
+              className={`flex flex-col items-center min-w-[70px] ${
+                selectedCategory === category.id ? "opacity-100" : "opacity-70"
+              }`}
             >
-              <div className="w-14 h-14 rounded-full bg-[#fff1eb] flex items-center justify-center text-2xl mb-1">
+              <div className={`w-14 h-14 rounded-full ${
+                selectedCategory === category.id 
+                  ? "bg-[#ff4b00]/20 ring-2 ring-[#ff4b00]" 
+                  : "bg-[#fff1eb]"
+                } flex items-center justify-center text-2xl mb-1`}>
                 {category.icon}
               </div>
-              <span className="text-sm text-gray-700">{category.name}</span>
+              <span className={`text-sm ${
+                selectedCategory === category.id
+                  ? "text-[#ff4b00] font-medium" 
+                  : "text-gray-700"
+              }`}>{category.name}</span>
             </button>
           ))}
         </div>
       </div>
       
-      {/* Events */}
+      {/* Trending Now */}
       <div className="mb-6">
         <div className="px-4 mb-3 flex justify-between items-center">
-          <h2 className="text-lg font-bold">Events</h2>
+          <h2 className="text-lg font-bold">Trending Now</h2>
           <Link to="/events" className="text-[#ff4b00] text-sm">
             See All
           </Link>
@@ -245,17 +235,17 @@ const HomeScreen = () => {
           <div className="px-4 flex justify-center py-8">
             <div className="w-10 h-10 border-4 border-[#ff4b00] rounded-full border-t-transparent animate-spin"></div>
           </div>
-        ) : (
+        ) : filteredEvents.length > 0 ? (
           <div className="flex overflow-x-auto px-4 space-x-4 pb-2 no-scrollbar">
-            {events.map((event) => (
-              <Link
+            {filteredEvents.map((event) => (
+              <div
                 key={event.event_id}
-                to={`/events/${event.event_id}`}
-                className="min-w-[280px] block bg-white rounded-lg overflow-hidden shadow"
+                onClick={() => navigate(`/events/${event.event_id}`)}
+                className="min-w-[280px] block bg-white rounded-lg overflow-hidden shadow cursor-pointer"
               >
                 <div className="relative">
                   <img
-                    src={event.imageUrl}
+                    src={event.image || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000)}?w=800&auto=format&fit=crop`}
                     alt={event.title}
                     className="h-36 w-full object-cover"
                   />
@@ -269,16 +259,32 @@ const HomeScreen = () => {
                   
                   <div className="flex items-center text-gray-500 text-sm mt-2">
                     <Calendar className="w-4 h-4 mr-1" />
-                    <span>{event.date}</span>
+                    <span>{formatEventDate(event.event_date)}</span>
                   </div>
                   
                   <div className="flex items-center text-gray-500 text-sm mt-1">
                     <MapPin className="w-4 h-4 mr-1" />
-                    <span>{event.location}</span>
+                    <span>{event.organizer_name || "Location not specified"}</span>
                   </div>
                 </div>
-              </Link>
+              </div>
             ))}
+          </div>
+        ) : (
+          <div className="px-4 py-8 text-center">
+            <p className="text-gray-500">
+              {selectedCategory 
+                ? `No ${selectedCategory} events found` 
+                : "No events found matching your criteria"}
+            </p>
+            {categoryFilterActive && (
+              <button 
+                onClick={resetFilters} 
+                className="mt-2 text-[#ff4b00] underline"
+              >
+                Show all events
+              </button>
+            )}
           </div>
         )}
       </div>
