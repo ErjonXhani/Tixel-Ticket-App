@@ -37,13 +37,12 @@ const LoginScreen = () => {
             {/* New Logo */}
             <div className="flex justify-center mb-8">
               <img 
-                src="/lovable-uploads/d6231a8e-4d69-4754-bcd4-3b9fee09db16.png" 
+                src="/lovable-uploads/4f84f21f-d678-4b27-bf99-b3fed96e6d6b.png" 
                 alt="Tixel Logo" 
-                className="h-16"
+                className="h-24"
               />
             </div>
-            <h1 className="text-2xl font-bold">Welcome Back</h1>
-            <p className="text-gray-500 mt-2">Sign in to your account</p>
+            <p className="text-xl font-bold">Sign in to your TIXEL account</p>
           </div>
           
           <form onSubmit={handleSubmit} className="space-y-4">
