@@ -1,6 +1,6 @@
 
 import { Outlet, NavLink, useLocation } from "react-router-dom";
-import { Home, Calendar, Search, User, ArrowRight } from "lucide-react";
+import { Home, Calendar, ArrowRight, User } from "lucide-react";
 import { useEffect } from "react";
 
 const MobileLayout = () => {
@@ -19,55 +19,45 @@ const MobileLayout = () => {
       </main>
       
       {/* Bottom navigation */}
-      <nav className="bottom-nav">
+      <nav className="bottom-nav fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-2 px-1 safe-bottom z-10">
         <NavLink 
           to="/home" 
           className={({isActive}) => 
-            `bottom-nav-item ${isActive ? "active" : ""}`
+            `flex flex-col items-center justify-center p-2 ${isActive ? "text-[#ff4b00]" : "text-gray-600"}`
           }
         >
           <Home className="w-5 h-5 mb-1" />
-          <span>Home</span>
+          <span className="text-xs">Home</span>
         </NavLink>
         
         <NavLink 
           to="/events" 
           className={({isActive}) => 
-            `bottom-nav-item ${isActive ? "active" : ""}`
+            `flex flex-col items-center justify-center p-2 ${isActive ? "text-[#ff4b00]" : "text-gray-600"}`
           }
         >
           <Calendar className="w-5 h-5 mb-1" />
-          <span>Events</span>
+          <span className="text-xs">Events</span>
         </NavLink>
         
         <NavLink 
           to="/resell" 
           className={({isActive}) => 
-            `bottom-nav-item ${isActive ? "active" : ""}`
+            `flex flex-col items-center justify-center p-2 ${isActive ? "text-[#ff4b00]" : "text-gray-600"}`
           }
         >
           <ArrowRight className="w-5 h-5 mb-1" />
-          <span>Resell</span>
-        </NavLink>
-        
-        <NavLink 
-          to="/search" 
-          className={({isActive}) => 
-            `bottom-nav-item ${isActive ? "active" : ""}`
-          }
-        >
-          <Search className="w-5 h-5 mb-1" />
-          <span>Search</span>
+          <span className="text-xs">Resell</span>
         </NavLink>
         
         <NavLink 
           to="/profile" 
           className={({isActive}) => 
-            `bottom-nav-item ${isActive ? "active" : ""}`
+            `flex flex-col items-center justify-center p-2 ${isActive ? "text-[#ff4b00]" : "text-gray-600"}`
           }
         >
           <User className="w-5 h-5 mb-1" />
-          <span>Profile</span>
+          <span className="text-xs">Profile</span>
         </NavLink>
       </nav>
     </div>

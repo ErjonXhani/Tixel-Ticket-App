@@ -15,6 +15,14 @@ interface Event {
   image: string;
   category: string;
   description: string;
+  venue_id?: number;
+  venue_name?: string;
+}
+
+interface Venue {
+  venue_id: number;
+  name: string;
+  location: string;
 }
 
 const categories = [
@@ -32,26 +40,52 @@ const HomeScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categoryFilterActive, setCategoryFilterActive] = useState(false);
+  const [venues, setVenues] = useState<Record<number, string>>({});
 
   // Fetch events from Supabase
   useEffect(() => {
-    const fetchEvents = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       try {
-        const { data, error } = await supabase
+        // Fetch events
+        const { data: eventsData, error: eventsError } = await supabase
           .from("Events")
           .select("*")
           .order("event_id", { ascending: false })
           .limit(20);
           
-        if (error) {
-          throw error;
+        if (eventsError) {
+          throw eventsError;
         }
         
-        if (data && data.length > 0) {
-          setEvents(data);
+        // Fetch venues
+        const { data: venuesData, error: venuesError } = await supabase
+          .from("Venues")
+          .select("*");
+          
+        if (venuesError) {
+          throw venuesError;
+        }
+        
+        // Create venue lookup table
+        const venueMap: Record<number, string> = {};
+        if (venuesData) {
+          venuesData.forEach((venue: Venue) => {
+            venueMap[venue.venue_id] = venue.name;
+          });
+        }
+        setVenues(venueMap);
+        
+        // Add venue names to events
+        const eventsWithVenues = eventsData ? eventsData.map((event: Event) => ({
+          ...event,
+          venue_name: event.venue_id ? venueMap[event.venue_id] : undefined
+        })) : [];
+        
+        if (eventsWithVenues && eventsWithVenues.length > 0) {
+          setEvents(eventsWithVenues);
           // Initially show only the 4 most recent events
-          setFilteredEvents(data.slice(0, 4));
+          setFilteredEvents(eventsWithVenues.slice(0, 4));
         } else {
           toast.info("No events found in the database");
           setEvents([]);
@@ -67,7 +101,7 @@ const HomeScreen = () => {
       }
     };
     
-    fetchEvents();
+    fetchData();
   }, []);
 
   // Handle search
@@ -83,7 +117,8 @@ const HomeScreen = () => {
     
     const searchResults = events.filter(event => 
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (event.organizer_name && event.organizer_name.toLowerCase().includes(searchQuery.toLowerCase()))
+      (event.organizer_name && event.organizer_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (event.venue_name && event.venue_name.toLowerCase().includes(searchQuery.toLowerCase()))
     );
     
     if (searchResults.length > 0) {
@@ -264,7 +299,7 @@ const HomeScreen = () => {
                   
                   <div className="flex items-center text-gray-500 text-sm mt-1">
                     <MapPin className="w-4 h-4 mr-1" />
-                    <span>{event.organizer_name || "Location not specified"}</span>
+                    <span>{event.venue_name || "Venue not specified"}</span>
                   </div>
                 </div>
               </div>

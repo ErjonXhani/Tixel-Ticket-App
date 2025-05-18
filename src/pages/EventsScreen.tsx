@@ -14,6 +14,14 @@ interface Event {
   image: string;
   category: string;
   description: string;
+  venue_id?: number;
+  venue_name?: string;
+}
+
+interface Venue {
+  venue_id: number;
+  name: string;
+  location: string;
 }
 
 const filters = [
@@ -37,32 +45,58 @@ const EventsScreen = () => {
   const [openFilter, setOpenFilter] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
+  const [venues, setVenues] = useState<Record<number, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   
-  // Fetch events from Supabase
+  // Fetch events and venues from Supabase
   useEffect(() => {
-    const fetchEvents = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       try {
-        const { data, error } = await supabase
+        // Fetch all events
+        const { data: eventsData, error: eventsError } = await supabase
           .from("Events")
           .select("*")
           .order("event_id", { ascending: false });
           
-        if (error) {
-          throw error;
+        if (eventsError) {
+          throw eventsError;
         }
         
-        if (data && data.length > 0) {
-          setEvents(data);
-          setFilteredEvents(data);
+        // Fetch all venues
+        const { data: venuesData, error: venuesError } = await supabase
+          .from("Venues")
+          .select("*");
+          
+        if (venuesError) {
+          throw venuesError;
+        }
+        
+        // Create venue lookup table
+        const venueMap: Record<number, string> = {};
+        if (venuesData) {
+          venuesData.forEach((venue: Venue) => {
+            venueMap[venue.venue_id] = venue.name;
+          });
+        }
+        setVenues(venueMap);
+        
+        // Add venue names to events
+        const eventsWithVenues = eventsData ? eventsData.map((event: Event) => ({
+          ...event,
+          venue_name: event.venue_id ? venueMap[event.venue_id] : undefined
+        })) : [];
+        
+        if (eventsWithVenues && eventsWithVenues.length > 0) {
+          setEvents(eventsWithVenues);
+          setFilteredEvents(eventsWithVenues);
         } else {
           toast.info("No events found in the database");
           setEvents([]);
           setFilteredEvents([]);
         }
       } catch (error: any) {
-        console.error("Error fetching events:", error);
+        console.error("Error fetching data:", error);
         toast.error("Couldn't load events from database");
         setEvents([]);
         setFilteredEvents([]);
@@ -71,7 +105,7 @@ const EventsScreen = () => {
       }
     };
     
-    fetchEvents();
+    fetchData();
   }, []);
   
   // Handle search input
@@ -91,7 +125,8 @@ const EventsScreen = () => {
     const results = events.filter(event => 
       event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (event.organizer_name && event.organizer_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (event.category && event.category.toLowerCase().includes(searchTerm.toLowerCase()))
+      (event.category && event.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (event.venue_name && event.venue_name.toLowerCase().includes(searchTerm.toLowerCase()))
     );
     
     setFilteredEvents(results);
@@ -281,14 +316,16 @@ const EventsScreen = () => {
                 onClick={() => goToEventDetails(event.event_id)}
                 className="block bg-white rounded-lg overflow-hidden shadow-sm border border-gray-100 cursor-pointer"
               >
-                <div className="flex">
-                  <img
-                    src={event.image || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000)}?w=800&auto=format&fit=crop`}
-                    alt={event.title}
-                    className="h-full w-1/3 object-cover"
-                  />
+                <div className="flex h-24">
+                  <div className="h-full w-1/3 flex-shrink-0">
+                    <img
+                      src={event.image || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000)}?w=800&auto=format&fit=crop`}
+                      alt={event.title}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
                   
-                  <div className="p-3 flex-1">
+                  <div className="p-3 flex-1 overflow-hidden">
                     <div className="flex justify-between items-start">
                       <h3 className="font-semibold text-sm line-clamp-2">{event.title}</h3>
                     </div>
@@ -300,7 +337,7 @@ const EventsScreen = () => {
                     
                     <div className="flex items-center text-gray-500 text-xs mt-1">
                       <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
-                      <span className="truncate">{event.organizer_name || "Location not specified"}</span>
+                      <span className="truncate">{event.venue_name || "Venue not specified"}</span>
                     </div>
                     
                     {event.category && (
