@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Calendar, MapPin, ArrowLeft, User, Clock } from "lucide-react";
@@ -44,7 +43,7 @@ const EventDetailsScreen = () => {
         const { data, error } = await supabase
           .from("Events")
           .select("*")
-          .eq("event_id", id)
+          .eq("event_id", parseInt(id))
           .single();
           
         if (error) {
