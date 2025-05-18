@@ -26,7 +26,6 @@ interface Venue {
 
 const filters = [
   { name: "All", value: "all" },
-  { name: "Today", value: "today" },
   { name: "This week", value: "week" },
   { name: "This month", value: "month" },
 ];
@@ -160,23 +159,26 @@ const EventsScreen = () => {
     if (timeFilter !== "all") {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const thisWeek = new Date(today);
-      thisWeek.setDate(thisWeek.getDate() - 7);
-      const thisMonth = new Date(today);
-      thisMonth.setMonth(thisMonth.getMonth() - 1);
       
-      filtered = filtered.filter(event => {
-        const eventDate = new Date(event.event_date);
+      if (timeFilter === "week") {
+        // Filter for events in the next 7 days
+        const nextWeek = new Date(today);
+        nextWeek.setDate(nextWeek.getDate() + 7);
         
-        if (timeFilter === "today") {
-          return eventDate >= today && eventDate < new Date(today.getTime() + 86400000);
-        } else if (timeFilter === "week") {
-          return eventDate >= thisWeek;
-        } else if (timeFilter === "month") {
-          return eventDate >= thisMonth;
-        }
-        return true;
-      });
+        filtered = filtered.filter(event => {
+          const eventDate = new Date(event.event_date);
+          return eventDate >= today && eventDate <= nextWeek;
+        });
+      } else if (timeFilter === "month") {
+        // Filter for events in the next 30 days
+        const nextMonth = new Date(today);
+        nextMonth.setDate(nextMonth.getDate() + 30);
+        
+        filtered = filtered.filter(event => {
+          const eventDate = new Date(event.event_date);
+          return eventDate >= today && eventDate <= nextMonth;
+        });
+      }
     }
     
     // Apply category filter
@@ -339,14 +341,6 @@ const EventsScreen = () => {
                       <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
                       <span className="truncate">{event.venue_name || "Venue not specified"}</span>
                     </div>
-                    
-                    {event.category && (
-                      <div className="mt-2">
-                        <span className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-0.5 rounded">
-                          {event.category}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
