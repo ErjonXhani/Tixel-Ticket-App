@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
-import Logo from "@/components/ui/logo";
 import { toast } from "sonner";
 
 const LoginScreen = () => {
@@ -35,7 +34,14 @@ const LoginScreen = () => {
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <Logo size="md" type="full" className="mx-auto mb-8" />
+            {/* New Logo */}
+            <div className="flex justify-center mb-8">
+              <img 
+                src="/lovable-uploads/d6231a8e-4d69-4754-bcd4-3b9fee09db16.png" 
+                alt="Tixel Logo" 
+                className="h-16"
+              />
+            </div>
             <h1 className="text-2xl font-bold">Welcome Back</h1>
             <p className="text-gray-500 mt-2">Sign in to your account</p>
           </div>

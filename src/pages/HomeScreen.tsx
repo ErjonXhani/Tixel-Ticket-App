@@ -1,11 +1,9 @@
-
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Calendar, MapPin } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import Logo from "@/components/ui/logo";
 
 interface Event {
   event_id: number;
@@ -176,15 +174,21 @@ const HomeScreen = () => {
 
   return (
     <div className="pb-6">
-      {/* Header */}
+      {/* Logo Header */}
+      <div style={{ backgroundColor: "#ff4b00" }} className="py-4 flex justify-center items-center">
+        <img 
+          src="/lovable-uploads/60600f6e-52f3-4db4-8dbb-2d9799b6ce8d.png" 
+          alt="Tixel Logo" 
+          className="h-12"
+        />
+      </div>
+      
+      {/* Welcome section */}
       <header className="pt-6 px-4">
         <div className="flex justify-between items-center mb-6">
           <div>
             <p className="text-gray-600">Welcome back,</p>
             <h1 className="text-xl font-bold">{user?.name || "Guest"}</h1>
-          </div>
-          <div className="w-10 h-10">
-            <Logo size="sm" type="icon" />
           </div>
         </div>
         
