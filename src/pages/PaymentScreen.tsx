@@ -22,9 +22,13 @@ interface Event {
 const PaymentScreen = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const eventId = searchParams.get("event");
-  const sectorId = searchParams.get("sector");
+  const eventIdParam = searchParams.get("event");
+  const sectorIdParam = searchParams.get("sector");
   const quantity = parseInt(searchParams.get("qty") || "1");
+  
+  // Convert string IDs to numbers
+  const eventId = eventIdParam ? parseInt(eventIdParam) : null;
+  const sectorId = sectorIdParam ? parseInt(sectorIdParam) : null;
   
   const [isLoading, setIsLoading] = useState(true);
   const [event, setEvent] = useState<Event | null>(null);
@@ -46,7 +50,7 @@ const PaymentScreen = () => {
       setIsLoading(true);
       
       try {
-        // Fetch event details
+        // Fetch event details with numeric IDs
         const { data: eventData, error: eventError } = await supabase
           .from("Events")
           .select("event_id, title, image")
@@ -56,7 +60,7 @@ const PaymentScreen = () => {
         if (eventError) throw eventError;
         setEvent(eventData);
         
-        // Fetch sector pricing
+        // Fetch sector pricing with numeric IDs
         const { data: pricingData, error: pricingError } = await supabase
           .from("EventSectorPricing")
           .select(`
@@ -263,6 +267,40 @@ const PaymentScreen = () => {
       </div>
     </div>
   );
+  
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    
+    if (!cardNumber || !cardName || !expiryDate || !cvv) {
+      toast.error("Please fill in all payment details");
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    // Simulate payment processing
+    setTimeout(() => {
+      toast.success("Payment successful! Tickets have been added to your account");
+      navigate("/home");
+    }, 2000);
+  }
+  
+  function formatCardNumber(value: string) {
+    const v = value.replace(/\s+/g, "").replace(/[^0-9]/gi, "");
+    const matches = v.match(/\d{4,16}/g);
+    const match = (matches && matches[0]) || "";
+    const parts = [];
+    
+    for (let i = 0, len = match.length; i < len; i += 4) {
+      parts.push(match.substring(i, i + 4));
+    }
+    
+    if (parts.length) {
+      return parts.join(" ");
+    } else {
+      return value;
+    }
+  }
 };
 
 export default PaymentScreen;

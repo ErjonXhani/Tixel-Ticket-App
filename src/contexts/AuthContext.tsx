@@ -18,6 +18,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isLoading: boolean;
+  loading: boolean; // Added for compatibility with App.tsx
+  checkAuth: () => Promise<void>; // Added for compatibility with App.tsx
   login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -67,6 +69,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Check auth method to be called on app initialization
+  const checkAuth = async () => {
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      setSession(currentSession);
+      setUser(transformUser(currentSession?.user ?? null));
+      
+      // If we're on login/signup/splash screens and already logged in, redirect to home
+      if (currentSession && ["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
+        navigate("/home");
+      } else if (!currentSession && !["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
+        // If not authenticated and not on an auth page, redirect to login
+        navigate("/login");
+      }
+    } catch (error) {
+      console.error("Error checking auth:", error);
+      setUser(null);
+      setSession(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Initialize auth state
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -86,20 +111,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(transformUser(currentSession?.user ?? null));
-      
-      // If we're on login/signup/splash screens and already logged in, redirect to home
-      if (currentSession && ["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
-        navigate("/home");
-      } else if (!currentSession && !["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
-        // If not authenticated and not on an auth page, redirect to login
-        navigate("/splash");
-      }
-      
-      setIsLoading(false);
-    });
+    checkAuth();
 
     return () => subscription.unsubscribe();
   }, [navigate, location.pathname]);
@@ -255,6 +267,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     isAuthenticated: !!user,
     isAdmin: user?.role === "admin",
     isLoading,
+    loading: isLoading, // Added for compatibility with App.tsx
+    checkAuth, // Added for compatibility with App.tsx
     login,
     signup,
     logout,
