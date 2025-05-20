@@ -2,14 +2,16 @@
 import React, { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
-import { Toaster } from "@/components/ui/toaster"
+import { Toaster } from "@/components/ui/toaster";
 
+import SplashScreen from "./pages/SplashScreen";
 import LoginScreen from "./pages/LoginScreen";
 import SignupScreen from "./pages/SignupScreen";
 import HomeScreen from "./pages/HomeScreen";
 import EventsScreen from "./pages/EventsScreen";
 import EventDetailsScreen from "./pages/EventDetailsScreen";
 import PaymentScreen from "./pages/PaymentScreen";
+import OnboardingScreen from "./pages/OnboardingScreen";
 
 function App() {
   const { user, loading, checkAuth } = useAuth();
@@ -35,12 +37,9 @@ function App() {
 
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          user ? <Navigate to="/home" /> : <Navigate to="/login" />
-        }
-      />
+      <Route path="/" element={<Navigate to="/splash" />} />
+      <Route path="/splash" element={<SplashScreen />} />
+      <Route path="/onboarding" element={<OnboardingScreen />} />
       <Route
         path="/login"
         element={user ? <Navigate to="/home" /> : <LoginScreen />}

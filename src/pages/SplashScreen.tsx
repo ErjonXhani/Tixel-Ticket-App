@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const SplashScreen = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     // Check if user has seen onboarding
@@ -13,17 +13,17 @@ const SplashScreen = () => {
     
     // Auto-navigate after splash animation (increased to 4 seconds)
     const timer = setTimeout(() => {
-      if (isAuthenticated) {
+      if (user) {
         navigate("/home");
       } else if (hasSeenOnboarding) {
         navigate("/login");
       } else {
         navigate("/onboarding");
       }
-    }, 4000);  // Changed to 4 seconds
+    }, 4000);  // 4 seconds
 
     return () => clearTimeout(timer);
-  }, [navigate, isAuthenticated]);
+  }, [navigate, user]);
 
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center" style={{ backgroundColor: "#ff4b00" }}>
