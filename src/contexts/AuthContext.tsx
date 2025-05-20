@@ -79,7 +79,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // If we're on login/signup/splash screens and already logged in, redirect to home
       if (currentSession && ["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
         navigate("/home");
-      } else if (!currentSession && !["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
+      } else if (!currentSession && !["/login", "/signup", "/splash", "/onboarding", "/payment"].includes(location.pathname)) {
         // If not authenticated and not on an auth page, redirect to login
         navigate("/login");
       }
