@@ -14,6 +14,7 @@ import EventDetailsScreen from "./pages/EventDetailsScreen";
 import PaymentScreen from "./pages/PaymentScreen";
 import OnboardingScreen from "./pages/OnboardingScreen";
 import AdminScreen from "./pages/AdminScreen";
+import ProfileScreen from "./pages/ProfileScreen";
 
 function App() {
   const { user, loading, checkAuth } = useAuth();
@@ -53,6 +54,8 @@ function App() {
           <Route path="/home" element={user ? <HomeScreen /> : <Navigate to="/login" />} />
           <Route path="/events" element={user ? <EventsScreen /> : <Navigate to="/login" />} />
           <Route path="/events/:id" element={user ? <EventDetailsScreen /> : <Navigate to="/login" />} />
+          <Route path="/profile" element={user ? <ProfileScreen /> : <Navigate to="/login" />} />
+          <Route path="/resell" element={user ? <div className="p-6"><h1 className="text-xl font-bold mb-4">Resell Tickets</h1><p>Resell tickets feature coming soon.</p></div> : <Navigate to="/login" />} />
         </Route>
         
         {/* Admin route */}
