@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
+import MobileLayout from "./components/layouts/MobileLayout";
 
 import SplashScreen from "./pages/SplashScreen";
 import LoginScreen from "./pages/LoginScreen";
@@ -39,38 +40,23 @@ function App() {
   return (
     <>
       <Routes>
+        {/* Public Routes */}
         <Route path="/" element={<Navigate to="/splash" />} />
         <Route path="/splash" element={<SplashScreen />} />
         <Route path="/onboarding" element={<OnboardingScreen />} />
-        <Route
-          path="/login"
-          element={user ? <Navigate to="/home" /> : <LoginScreen />}
-        />
-        <Route
-          path="/signup"
-          element={user ? <Navigate to="/home" /> : <SignupScreen />}
-        />
-        <Route
-          path="/home"
-          element={user ? <HomeScreen /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/events"
-          element={user ? <EventsScreen /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/events/:id"
-          element={user ? <EventDetailsScreen /> : <Navigate to="/login" />}
-        />
-        
-        {/* Add the payment route - don't require login for demo purposes */}
+        <Route path="/login" element={user ? <Navigate to="/home" /> : <LoginScreen />} />
+        <Route path="/signup" element={user ? <Navigate to="/home" /> : <SignupScreen />} />
         <Route path="/payment" element={<PaymentScreen />} />
         
+        {/* Protected Routes with Navigation Bar */}
+        <Route element={<MobileLayout />}>
+          <Route path="/home" element={user ? <HomeScreen /> : <Navigate to="/login" />} />
+          <Route path="/events" element={user ? <EventsScreen /> : <Navigate to="/login" />} />
+          <Route path="/events/:id" element={user ? <EventDetailsScreen /> : <Navigate to="/login" />} />
+        </Route>
+        
         {/* Admin route */}
-        <Route
-          path="/admin"
-          element={user?.role === "admin" ? <AdminScreen /> : <Navigate to="/login" />}
-        />
+        <Route path="/admin" element={user?.role === "admin" ? <AdminScreen /> : <Navigate to="/login" />} />
       </Routes>
       <Toaster />
     </>
