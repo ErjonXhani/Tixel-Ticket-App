@@ -1,78 +1,76 @@
+import React, { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./contexts/AuthContext";
+import { Toaster } from "@/components/ui/toaster"
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Routes, Route, Navigate } from "react-router-dom";
-
-// Pages
-import SplashScreen from "./pages/SplashScreen";
-import OnboardingScreen from "./pages/OnboardingScreen";
 import LoginScreen from "./pages/LoginScreen";
 import SignupScreen from "./pages/SignupScreen";
 import HomeScreen from "./pages/HomeScreen";
-import EventDetailsScreen from "./pages/EventDetailsScreen";
 import EventsScreen from "./pages/EventsScreen";
-import AdminScreen from "./pages/AdminScreen";
-import AdminEventForm from "./pages/AdminEventForm";
-import ProfileScreen from "./pages/ProfileScreen";
-import ResellScreen from "./pages/ResellScreen"; // New Resell screen
+import EventDetailsScreen from "./pages/EventDetailsScreen";
 
-// Contexts
-import { AuthProvider } from "./contexts/AuthContext";
+// Import the PaymentScreen component
+import PaymentScreen from "./pages/PaymentScreen";
 
-// Layout components
-import MobileLayout from "./components/layouts/MobileLayout";
-import AdminLayout from "./components/layouts/AdminLayout";
-import NotFound from "./pages/NotFound";
-import { useEffect } from "react";
+function App() {
+  const { user, loading, checkAuth } = useAuth();
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
-const queryClient = new QueryClient();
-
-const App = () => {
-  // Initialize app
   useEffect(() => {
-    // Any app initialization code can go here
-    console.log("Tixel app initialized");
-  }, []);
+    const performAuthCheck = async () => {
+      await checkAuth();
+      setHasCheckedAuth(true);
+    };
+
+    performAuthCheck();
+  }, [checkAuth]);
+
+  // Show a loading indicator while checking authentication
+  if (loading || !hasCheckedAuth) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-[#ff4b00] rounded-full border-t-transparent animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <Routes>
-            {/* Initial screens */}
-            <Route path="/splash" element={<SplashScreen />} />
-            <Route path="/onboarding" element={<OnboardingScreen />} />
-            <Route path="/login" element={<LoginScreen />} />
-            <Route path="/signup" element={<SignupScreen />} />
-            
-            {/* User app screens with navigation */}
-            <Route path="/" element={<MobileLayout />}>
-              <Route index element={<Navigate to="/home" replace />} />
-              <Route path="home" element={<HomeScreen />} />
-              <Route path="events" element={<EventsScreen />} />
-              <Route path="events/:id" element={<EventDetailsScreen />} />
-              <Route path="resell" element={<ResellScreen />} />
-              <Route path="profile" element={<ProfileScreen />} />
-            </Route>
-            
-            {/* Admin screens */}
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<AdminScreen />} />
-              <Route path="events/create" element={<AdminEventForm />} />
-              <Route path="events/edit/:id" element={<AdminEventForm />} />
-            </Route>
-            
-            {/* Not found */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            user ? <Navigate to="/home" /> : <Navigate to="/login" />
+          }
+        />
+        <Route
+          path="/login"
+          element={user ? <Navigate to="/home" /> : <LoginScreen />}
+        />
+        <Route
+          path="/signup"
+          element={user ? <Navigate to="/home" /> : <SignupScreen />}
+        />
+        <Route
+          path="/home"
+          element={user ? <HomeScreen /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/events"
+          element={user ? <EventsScreen /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/events/:id"
+          element={user ? <EventDetailsScreen /> : <Navigate to="/login" />}
+        />
+        
+        {/* Add the new payment route */}
+        <Route path="/payment" element={<PaymentScreen />} />
+        
+      </Routes>
+      <Toaster />
+    </BrowserRouter>
   );
-};
+}
 
 export default App;

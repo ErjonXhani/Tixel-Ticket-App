@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Calendar, MapPin, ArrowLeft, User, Clock } from "lucide-react";
+import { Calendar, MapPin, ArrowLeft, User, Clock, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,13 +14,16 @@ interface Event {
   event_date: string;
   image: string;
   category: string;
+  venue_id?: number;
+  venue_name?: string;
 }
 
-interface TicketType {
-  id: string;
-  name: string;
+interface SectorPrice {
+  pricing_id: number;
+  sector_id: number;
+  sector_name: string;
   price: number;
-  remaining: number;
+  available_tickets: number;
 }
 
 const EventDetailsScreen = () => {
@@ -27,53 +31,84 @@ const EventDetailsScreen = () => {
   const navigate = useNavigate();
   const [event, setEvent] = useState<Event | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([
-    { id: "standard", name: "Standard Entry", price: 45, remaining: 120 },
-    { id: "vip", name: "VIP Package", price: 120, remaining: 36 },
-  ]);
-  const [selectedTicket, setSelectedTicket] = useState<TicketType | null>(null);
+  const [sectorPrices, setSectorPrices] = useState<SectorPrice[]>([]);
+  const [selectedSector, setSelectedSector] = useState<SectorPrice | null>(null);
   const [quantity, setQuantity] = useState(1);
   
   useEffect(() => {
-    const fetchEvent = async () => {
+    const fetchEventDetails = async () => {
       if (!id) return;
       
       setIsLoading(true);
       try {
-        const { data, error } = await supabase
+        // Fetch event details
+        const { data: eventData, error: eventError } = await supabase
           .from("Events")
-          .select("*")
+          .select("*, Venues(name)")
           .eq("event_id", parseInt(id))
           .single();
           
-        if (error) {
-          throw error;
+        if (eventError) {
+          throw eventError;
         }
         
-        if (data) {
-          setEvent(data);
-          // Once we have real ticket data, we would fetch that here too
+        if (eventData) {
+          const formattedEvent = {
+            ...eventData,
+            venue_name: eventData.Venues?.name,
+          };
+          setEvent(formattedEvent);
+          
+          // Fetch sector pricing for this event
+          const { data: pricingData, error: pricingError } = await supabase
+            .from("EventSectorPricing")
+            .select(`
+              pricing_id,
+              price,
+              available_tickets,
+              sector_id,
+              Sectors(sector_name)
+            `)
+            .eq("event_id", parseInt(id));
+            
+          if (pricingError) {
+            throw pricingError;
+          }
+          
+          if (pricingData && pricingData.length > 0) {
+            const formattedPricing = pricingData.map(item => ({
+              pricing_id: item.pricing_id,
+              sector_id: item.sector_id,
+              sector_name: item.Sectors.sector_name,
+              price: item.price,
+              available_tickets: item.available_tickets
+            }));
+            
+            setSectorPrices(formattedPricing);
+            // Select first sector by default
+            setSelectedSector(formattedPricing[0]);
+          } else {
+            console.log("No pricing data found for this event");
+            // Fallback to dummy data if no pricing found
+            setSectorPrices([
+              { pricing_id: 0, sector_id: 0, sector_name: "General Admission", price: 49.99, available_tickets: 100 },
+              { pricing_id: 1, sector_id: 1, sector_name: "VIP", price: 99.99, available_tickets: 50 }
+            ]);
+          }
         } else {
           toast.error("Event not found");
           navigate("/events");
         }
       } catch (error) {
-        console.error("Error fetching event:", error);
+        console.error("Error fetching event details:", error);
         toast.error("Failed to load event details");
       } finally {
         setIsLoading(false);
       }
     };
     
-    fetchEvent();
+    fetchEventDetails();
   }, [id, navigate]);
-  
-  useEffect(() => {
-    // Set first ticket type as default selected
-    if (ticketTypes.length > 0 && !selectedTicket) {
-      setSelectedTicket(ticketTypes[0]);
-    }
-  }, [ticketTypes, selectedTicket]);
   
   const handleQuantityChange = (amount: number) => {
     const newQuantity = quantity + amount;
@@ -83,16 +118,21 @@ const EventDetailsScreen = () => {
   };
   
   const handlePurchase = () => {
-    if (!selectedTicket) {
+    if (!selectedSector) {
       toast.error("Please select a ticket type");
       return;
     }
     
-    toast.success(`Reserved ${quantity} ${selectedTicket.name} ticket${quantity > 1 ? 's' : ''}!`);
-    // In a real app, we would save this to the database
-    setTimeout(() => {
-      navigate("/home");
-    }, 2000);
+    if (!id) {
+      toast.error("Event information is missing");
+      return;
+    }
+    
+    // In a real app, we would redirect to a payment gateway
+    toast.success(`Processing payment for ${quantity} ${selectedSector.sector_name} ticket${quantity > 1 ? 's' : ''}...`);
+    
+    // Navigate to a payment page
+    navigate(`/payment?event=${id}&sector=${selectedSector.sector_id}&qty=${quantity}`);
   };
   
   // Format date for display
@@ -186,7 +226,7 @@ const EventDetailsScreen = () => {
         <div className="flex items-start text-gray-700 mb-4">
           <MapPin className="w-4 h-4 mr-2 mt-0.5" />
           <div>
-            <div>{event.organizer_name || "Venue not specified"}</div>
+            <div>{event.venue_name || "Venue not specified"}</div>
           </div>
         </div>
         
@@ -200,27 +240,30 @@ const EventDetailsScreen = () => {
           <p className="text-gray-700">{event.description || "No description available."}</p>
         </div>
         
-        {/* Ticket selection */}
+        {/* Ticket selection - Updated to use real sectors */}
         <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-3">Select Tickets</h2>
+          <div className="flex items-center mb-3">
+            <Ticket className="w-5 h-5 mr-2 text-[#ff4b00]" />
+            <h2 className="text-lg font-semibold">Select Tickets</h2>
+          </div>
           
           <div className="space-y-3">
-            {ticketTypes.map((ticket) => (
+            {sectorPrices.map((sector) => (
               <div 
-                key={ticket.id}
+                key={sector.sector_id}
                 className={`border rounded-lg p-3 cursor-pointer ${
-                  selectedTicket?.id === ticket.id 
+                  selectedSector?.sector_id === sector.sector_id 
                     ? "border-[#ff4b00] bg-[#ff4b00]/5" 
                     : "border-gray-200"
                 }`}
-                onClick={() => setSelectedTicket(ticket)}
+                onClick={() => setSelectedSector(sector)}
               >
                 <div className="flex justify-between items-center">
                   <div>
-                    <h3 className="font-medium">{ticket.name}</h3>
-                    <p className="text-sm text-gray-500">{ticket.remaining} remaining</p>
+                    <h3 className="font-medium">{sector.sector_name}</h3>
+                    <p className="text-sm text-gray-500">{sector.available_tickets} tickets available</p>
                   </div>
-                  <div className="text-lg font-semibold">${ticket.price}</div>
+                  <div className="text-lg font-semibold">${sector.price.toFixed(2)}</div>
                 </div>
               </div>
             ))}
@@ -245,7 +288,7 @@ const EventDetailsScreen = () => {
             <button 
               className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center"
               onClick={() => handleQuantityChange(1)}
-              disabled={quantity >= 10}
+              disabled={quantity >= 10 || (selectedSector && quantity >= selectedSector.available_tickets)}
             >
               +
             </button>
@@ -257,14 +300,14 @@ const EventDetailsScreen = () => {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 safe-bottom flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500">Total Price</p>
-          <p className="text-xl font-bold">${selectedTicket ? selectedTicket.price * quantity : 0}</p>
+          <p className="text-xl font-bold">${selectedSector ? (selectedSector.price * quantity).toFixed(2) : "0.00"}</p>
         </div>
         
         <Button 
           className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 px-6"
           onClick={handlePurchase}
         >
-          Reserve Tickets
+          Buy Tickets
         </Button>
       </div>
     </div>

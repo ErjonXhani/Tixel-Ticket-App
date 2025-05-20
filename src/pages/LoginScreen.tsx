@@ -34,7 +34,7 @@ const LoginScreen = () => {
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            {/* New Logo */}
+            {/* Updated Logo - just the X */}
             <div className="flex justify-center mb-8">
               <img 
                 src="/lovable-uploads/4f84f21f-d678-4b27-bf99-b3fed96e6d6b.png" 
@@ -83,7 +83,7 @@ const LoginScreen = () => {
             
             <Button
               type="submit"
-              className="w-full bg-primary hover:bg-primary-600 text-white"
+              className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 text-white"
               size="lg"
               disabled={isSubmitting}
             >
@@ -93,7 +93,7 @@ const LoginScreen = () => {
           
           <div className="mt-6 text-center text-sm">
             <span className="text-gray-600">Don't have an account? </span>
-            <Link to="/signup" className="text-primary hover:underline font-medium">
+            <Link to="/signup" className="text-[#ff4b00] hover:underline font-medium">
               Sign up
             </Link>
           </div>

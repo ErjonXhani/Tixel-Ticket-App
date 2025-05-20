@@ -50,6 +50,45 @@ export type Database = {
           },
         ]
       }
+      EventSectorPricing: {
+        Row: {
+          available_tickets: number
+          event_id: number
+          price: number
+          pricing_id: number
+          sector_id: number
+        }
+        Insert: {
+          available_tickets: number
+          event_id: number
+          price: number
+          pricing_id?: number
+          sector_id: number
+        }
+        Update: {
+          available_tickets?: number
+          event_id?: number
+          price?: number
+          pricing_id?: number
+          sector_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "EventSectorPricing_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "Events"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "EventSectorPricing_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "Sectors"
+            referencedColumns: ["sector_id"]
+          },
+        ]
+      }
       Notifications: {
         Row: {
           created_at: string | null
@@ -127,6 +166,38 @@ export type Database = {
           },
         ]
       }
+      Sectors: {
+        Row: {
+          capacity: number
+          description: string | null
+          sector_id: number
+          sector_name: string
+          venue_id: number
+        }
+        Insert: {
+          capacity: number
+          description?: string | null
+          sector_id?: number
+          sector_name: string
+          venue_id: number
+        }
+        Update: {
+          capacity?: number
+          description?: string | null
+          sector_id?: number
+          sector_name?: string
+          venue_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Sectors_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "Venues"
+            referencedColumns: ["venue_id"]
+          },
+        ]
+      }
       SystemLogs: {
         Row: {
           action_type: string | null
@@ -164,6 +235,7 @@ export type Database = {
           event_id: number | null
           owner_id: number | null
           seat_info: string | null
+          sector_id: number | null
           status: string | null
           ticket_id: number
           ticket_type: string | null
@@ -172,6 +244,7 @@ export type Database = {
           event_id?: number | null
           owner_id?: number | null
           seat_info?: string | null
+          sector_id?: number | null
           status?: string | null
           ticket_id?: number
           ticket_type?: string | null
@@ -180,6 +253,7 @@ export type Database = {
           event_id?: number | null
           owner_id?: number | null
           seat_info?: string | null
+          sector_id?: number | null
           status?: string | null
           ticket_id?: number
           ticket_type?: string | null
@@ -198,6 +272,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "Users"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "Tickets_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "Sectors"
+            referencedColumns: ["sector_id"]
           },
         ]
       }
