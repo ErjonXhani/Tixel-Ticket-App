@@ -1,11 +1,12 @@
 
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, CreditCard } from "lucide-react";
+import { ArrowLeft, CreditCard, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SectorPrice {
   sector_id: number;
@@ -22,13 +23,14 @@ interface Event {
 const PaymentScreen = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const eventIdParam = searchParams.get("event");
-  const sectorIdParam = searchParams.get("sector");
-  const quantity = parseInt(searchParams.get("qty") || "1");
+  const { user } = useAuth();
   
-  // Convert string IDs to numbers
-  const eventId = eventIdParam ? parseInt(eventIdParam) : null;
-  const sectorId = sectorIdParam ? parseInt(sectorIdParam) : null;
+  // Get all necessary parameters from URL
+  const eventId = parseInt(searchParams.get("event") || "0");
+  const sectorId = parseInt(searchParams.get("sector") || "0");
+  const quantity = parseInt(searchParams.get("qty") || "1");
+  const price = parseFloat(searchParams.get("price") || "0");
+  const userId = parseInt(searchParams.get("user") || "0");
   
   const [isLoading, setIsLoading] = useState(true);
   const [event, setEvent] = useState<Event | null>(null);
@@ -38,10 +40,12 @@ const PaymentScreen = () => {
   const [expiryDate, setExpiryDate] = useState("");
   const [cvv, setCvv] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [transactionId, setTransactionId] = useState<number | null>(null);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
   
   useEffect(() => {
     const fetchPaymentDetails = async () => {
-      if (!eventId || !sectorId) {
+      if (!eventId || !sectorId || !userId) {
         toast.error("Missing payment information");
         navigate("/events");
         return;
@@ -50,7 +54,7 @@ const PaymentScreen = () => {
       setIsLoading(true);
       
       try {
-        // Fetch event details with numeric IDs
+        // Fetch event details
         const { data: eventData, error: eventError } = await supabase
           .from("Events")
           .select("event_id, title, image")
@@ -60,25 +64,21 @@ const PaymentScreen = () => {
         if (eventError) throw eventError;
         setEvent(eventData);
         
-        // Fetch sector pricing with numeric IDs
-        const { data: pricingData, error: pricingError } = await supabase
-          .from("EventSectorPricing")
-          .select(`
-            sector_id,
-            price,
-            Sectors(sector_name)
-          `)
-          .eq("event_id", eventId)
+        // Fetch sector information
+        const { data: sectorData, error: sectorError } = await supabase
+          .from("Sectors")
+          .select("sector_id, sector_name")
           .eq("sector_id", sectorId)
           .single();
           
-        if (pricingError) throw pricingError;
+        if (sectorError) throw sectorError;
         
         setSector({
-          sector_id: pricingData.sector_id,
-          sector_name: pricingData.Sectors.sector_name,
-          price: pricingData.price
+          sector_id: sectorData.sector_id,
+          sector_name: sectorData.sector_name,
+          price: price
         });
+        
       } catch (error) {
         console.error("Error fetching payment details:", error);
         toast.error("Failed to load payment details");
@@ -89,7 +89,48 @@ const PaymentScreen = () => {
     };
     
     fetchPaymentDetails();
-  }, [eventId, sectorId, navigate]);
+  }, [eventId, sectorId, navigate, price, userId]);
+  
+  // Create a transaction when the component mounts
+  useEffect(() => {
+    const createTransaction = async () => {
+      if (!eventId || !sectorId || !userId || !price || !user) return;
+      
+      try {
+        // Create transaction record with Pending status
+        const { data, error } = await supabase
+          .from("Transactions")
+          .insert({
+            buyer_id: userId,
+            total_amount: price * quantity,
+            payment_method: 'Credit Card',
+            payment_status: 'Pending',
+            // We'll link to the ticket after payment is complete
+            ticket_id: null
+          })
+          .select()
+          .single();
+          
+        if (error) {
+          console.error("Error creating transaction:", error);
+          toast.error("Failed to initialize payment");
+          return;
+        }
+        
+        if (data) {
+          setTransactionId(data.transaction_id);
+        }
+        
+      } catch (error) {
+        console.error("Error in transaction creation:", error);
+      }
+    };
+    
+    if (!isLoading && !transactionId) {
+      createTransaction();
+    }
+    
+  }, [isLoading, eventId, sectorId, userId, quantity, price, user, transactionId]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,13 +140,58 @@ const PaymentScreen = () => {
       return;
     }
     
+    if (!transactionId) {
+      toast.error("Transaction information is missing");
+      return;
+    }
+    
     setIsProcessing(true);
     
-    // Simulate payment processing
-    setTimeout(() => {
-      toast.success("Payment successful! Tickets have been added to your account");
-      navigate("/home");
-    }, 2000);
+    try {
+      // First, create a ticket
+      const { data: ticketData, error: ticketError } = await supabase
+        .from("Tickets")
+        .insert({
+          event_id: eventId,
+          owner_id: userId,
+          sector_id: sectorId,
+          status: 'Reserved',
+          ticket_type: sector?.sector_name || 'Standard'
+        })
+        .select()
+        .single();
+        
+      if (ticketError) {
+        throw ticketError;
+      }
+      
+      // Then update the transaction with the ticket_id and status
+      const { error: transactionError } = await supabase
+        .from("Transactions")
+        .update({
+          ticket_id: ticketData.ticket_id,
+          payment_status: 'Paid'
+        })
+        .eq("transaction_id", transactionId);
+        
+      if (transactionError) {
+        throw transactionError;
+      }
+      
+      // Success!
+      setPaymentSuccess(true);
+      toast.success("Payment successful! Your ticket has been confirmed.");
+      
+      // Wait 2 seconds then navigate to home screen
+      setTimeout(() => {
+        navigate("/home");
+      }, 2000);
+      
+    } catch (error) {
+      console.error("Payment processing error:", error);
+      toast.error("Payment failed. Please try again.");
+      setIsProcessing(false);
+    }
   };
   
   // Format card number with spaces
@@ -130,6 +216,27 @@ const PaymentScreen = () => {
     return (
       <div className="h-screen flex items-center justify-center">
         <div className="w-12 h-12 border-4 border-[#ff4b00] rounded-full border-t-transparent animate-spin"></div>
+      </div>
+    );
+  }
+  
+  // Success screen
+  if (paymentSuccess) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center p-6 bg-green-50">
+        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-6">
+          <Check className="w-10 h-10 text-green-500" />
+        </div>
+        <h2 className="text-2xl font-bold text-green-800 mb-2 text-center">Payment Successful!</h2>
+        <p className="text-center text-green-700 mb-6">
+          Your ticket has been confirmed and added to your account.
+        </p>
+        <Button 
+          onClick={() => navigate("/home")}
+          className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 px-6"
+        >
+          Go to Home
+        </Button>
       </div>
     );
   }
@@ -261,7 +368,7 @@ const PaymentScreen = () => {
             className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 mt-6"
             disabled={isProcessing}
           >
-            {isProcessing ? "Processing..." : "Pay Now"}
+            {isProcessing ? "Processing..." : "Confirm & Pay"}
           </Button>
         </form>
       </div>

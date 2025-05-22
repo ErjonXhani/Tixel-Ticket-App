@@ -5,6 +5,7 @@ import { Calendar, MapPin, ArrowLeft, User, Clock, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Event {
   event_id: number;
@@ -29,11 +30,41 @@ interface SectorPrice {
 const EventDetailsScreen = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sectorPrices, setSectorPrices] = useState<SectorPrice[]>([]);
   const [selectedSector, setSelectedSector] = useState<SectorPrice | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  
+  // Get numeric user ID from our Users table
+  useEffect(() => {
+    const fetchUserId = async () => {
+      if (!user) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from("Users")
+          .select("user_id")
+          .eq("auth_uid", user.id)
+          .single();
+          
+        if (error) {
+          console.error("Error fetching user ID:", error);
+          return;
+        }
+        
+        if (data) {
+          setCurrentUserId(data.user_id);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user ID:", error);
+      }
+    };
+    
+    fetchUserId();
+  }, [user]);
   
   useEffect(() => {
     const fetchEventDetails = async () => {
@@ -88,12 +119,8 @@ const EventDetailsScreen = () => {
             // Select first sector by default
             setSelectedSector(formattedPricing[0]);
           } else {
-            console.log("No pricing data found for this event");
-            // Fallback to dummy data if no pricing found
-            setSectorPrices([
-              { pricing_id: 0, sector_id: 0, sector_name: "General Admission", price: 49.99, available_tickets: 100 },
-              { pricing_id: 1, sector_id: 1, sector_name: "VIP", price: 99.99, available_tickets: 50 }
-            ]);
+            // No pricing data found
+            setSectorPrices([]);
           }
         } else {
           toast.error("Event not found");
@@ -127,12 +154,14 @@ const EventDetailsScreen = () => {
       toast.error("Event information is missing");
       return;
     }
+
+    if (!currentUserId) {
+      toast.error("User information is missing. Please log in again.");
+      return;
+    }
     
-    // In a real app, we would redirect to a payment gateway
-    toast.success(`Processing payment for ${quantity} ${selectedSector.sector_name} ticket${quantity > 1 ? 's' : ''}...`);
-    
-    // Navigate to a payment page
-    navigate(`/payment?event=${id}&sector=${selectedSector.sector_id}&qty=${quantity}`);
+    // Navigate to payment page with all necessary data
+    navigate(`/payment?event=${id}&sector=${selectedSector.sector_id}&qty=${quantity}&price=${selectedSector.price}&user=${currentUserId}`);
   };
   
   // Format date for display
@@ -151,7 +180,7 @@ const EventDetailsScreen = () => {
     }
   };
   
-  // Format time for display (placeholder since we don't have time data yet)
+  // Format time for display
   const formatEventTime = (dateString?: string) => {
     if (!dateString) return "TBD";
     
@@ -220,7 +249,7 @@ const EventDetailsScreen = () => {
           <span>{formatEventDate(event.event_date)}</span>
           <span className="mx-2">•</span>
           <Clock className="w-4 h-4 mr-2" />
-          <span>{formatEventTime(event.event_date)} - {formatEventTime(event.event_date)}</span>
+          <span>{formatEventTime(event.event_date)}</span>
         </div>
         
         <div className="flex items-start text-gray-700 mb-4">
@@ -240,76 +269,102 @@ const EventDetailsScreen = () => {
           <p className="text-gray-700">{event.description || "No description available."}</p>
         </div>
         
-        {/* Ticket selection - Updated to use real sectors */}
+        {/* Ticket selection - Show real sectors */}
         <div className="mb-6">
           <div className="flex items-center mb-3">
             <Ticket className="w-5 h-5 mr-2 text-[#ff4b00]" />
             <h2 className="text-lg font-semibold">Select Tickets</h2>
           </div>
           
-          <div className="space-y-3">
-            {sectorPrices.map((sector) => (
-              <div 
-                key={sector.sector_id}
-                className={`border rounded-lg p-3 cursor-pointer ${
-                  selectedSector?.sector_id === sector.sector_id 
-                    ? "border-[#ff4b00] bg-[#ff4b00]/5" 
-                    : "border-gray-200"
-                }`}
-                onClick={() => setSelectedSector(sector)}
-              >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-medium">{sector.sector_name}</h3>
-                    <p className="text-sm text-gray-500">{sector.available_tickets} tickets available</p>
+          {sectorPrices.length > 0 ? (
+            <div className="space-y-3">
+              {sectorPrices.map((sector) => (
+                <div 
+                  key={sector.sector_id}
+                  className={`border rounded-lg p-3 cursor-pointer ${
+                    selectedSector?.sector_id === sector.sector_id 
+                      ? "border-[#ff4b00] bg-[#ff4b00]/5" 
+                      : "border-gray-200"
+                  }`}
+                  onClick={() => setSelectedSector(sector)}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="font-medium">{sector.sector_name}</h3>
+                      <p className="text-sm text-gray-500">
+                        {sector.available_tickets > 0 
+                          ? `${sector.available_tickets} tickets available` 
+                          : "Sold out"
+                        }
+                      </p>
+                    </div>
+                    <div className="text-lg font-semibold">${sector.price.toFixed(2)}</div>
                   </div>
-                  <div className="text-lg font-semibold">${sector.price.toFixed(2)}</div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-4 bg-gray-50 rounded-lg text-center">
+              <p className="text-gray-600">Tickets aren't available yet.</p>
+            </div>
+          )}
         </div>
         
         {/* Quantity selector */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold mb-3">Quantity</h2>
-          
-          <div className="flex items-center">
-            <button 
-              className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center"
-              onClick={() => handleQuantityChange(-1)}
-              disabled={quantity <= 1}
-            >
-              -
-            </button>
+        {sectorPrices.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold mb-3">Quantity</h2>
             
-            <span className="mx-6 text-lg font-medium">{quantity}</span>
-            
-            <button 
-              className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center"
-              onClick={() => handleQuantityChange(1)}
-              disabled={quantity >= 10 || (selectedSector && quantity >= selectedSector.available_tickets)}
-            >
-              +
-            </button>
+            <div className="flex items-center">
+              <button 
+                className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center"
+                onClick={() => handleQuantityChange(-1)}
+                disabled={quantity <= 1}
+              >
+                -
+              </button>
+              
+              <span className="mx-6 text-lg font-medium">{quantity}</span>
+              
+              <button 
+                className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center"
+                onClick={() => handleQuantityChange(1)}
+                disabled={quantity >= 10 || (selectedSector && quantity >= selectedSector.available_tickets)}
+              >
+                +
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+        
+        {/* Buy Ticket Button */}
+        {sectorPrices.length > 0 && selectedSector && selectedSector.available_tickets > 0 && (
+          <Button 
+            className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 mb-4"
+            onClick={handlePurchase}
+          >
+            Buy Ticket
+          </Button>
+        )}
       </div>
       
       {/* Checkout bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 safe-bottom flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500">Total Price</p>
-          <p className="text-xl font-bold">${selectedSector ? (selectedSector.price * quantity).toFixed(2) : "0.00"}</p>
+      {sectorPrices.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 safe-bottom flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-500">Total Price</p>
+            <p className="text-xl font-bold">${selectedSector ? (selectedSector.price * quantity).toFixed(2) : "0.00"}</p>
+          </div>
+          
+          <Button 
+            className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 px-6"
+            onClick={handlePurchase}
+            disabled={!selectedSector || selectedSector.available_tickets <= 0}
+          >
+            Buy Tickets
+          </Button>
         </div>
-        
-        <Button 
-          className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 px-6"
-          onClick={handlePurchase}
-        >
-          Buy Tickets
-        </Button>
-      </div>
+      )}
     </div>
   );
 };
