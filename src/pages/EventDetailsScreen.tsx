@@ -36,13 +36,19 @@ const EventDetailsScreen = () => {
   const [selectedSector, setSelectedSector] = useState<SectorPrice | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
   
-  // Get numeric user ID from our Users table
+  // Get numeric user ID from our Users table with better error handling
   useEffect(() => {
     const fetchUserId = async () => {
-      if (!user) return;
+      if (!user) {
+        setIsLoadingUser(false);
+        return;
+      }
       
       try {
+        console.log("Fetching user ID for auth user:", user.id);
+        
         const { data, error } = await supabase
           .from("Users")
           .select("user_id")
@@ -51,14 +57,50 @@ const EventDetailsScreen = () => {
           
         if (error) {
           console.error("Error fetching user ID:", error);
+          
+          // If user not found, try to create one (fallback safety net)
+          if (error.code === 'PGRST116') {
+            console.log("User not found in Users table, creating one...");
+            const { data: newUser, error: createError } = await supabase
+              .from("Users")
+              .insert({
+                auth_uid: user.id,
+                username: user.email?.split('@')[0] || 'user',
+                email: user.email || '',
+                password_hash: 'managed_by_supabase',
+                full_name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+                role: 'user'
+              })
+              .select("user_id")
+              .single();
+              
+            if (createError) {
+              console.error("Error creating user:", createError);
+              toast.error("Failed to set up user account. Please try logging out and back in.");
+              setIsLoadingUser(false);
+              return;
+            }
+            
+            if (newUser) {
+              console.log("User created successfully with ID:", newUser.user_id);
+              setCurrentUserId(newUser.user_id);
+            }
+          } else {
+            toast.error("Failed to load user information. Please try refreshing the page.");
+          }
+          setIsLoadingUser(false);
           return;
         }
         
         if (data) {
+          console.log("User ID found:", data.user_id);
           setCurrentUserId(data.user_id);
         }
       } catch (error) {
         console.error("Failed to fetch user ID:", error);
+        toast.error("Failed to load user information. Please try refreshing the page.");
+      } finally {
+        setIsLoadingUser(false);
       }
     };
     
@@ -144,23 +186,60 @@ const EventDetailsScreen = () => {
   };
   
   const handlePurchase = () => {
+    console.log("Buy tickets clicked - Starting validation...");
+    
+    // Validation checks with detailed logging
     if (!selectedSector) {
+      console.log("Purchase failed: No sector selected");
       toast.error("Please select a ticket type");
       return;
     }
     
     if (!id) {
+      console.log("Purchase failed: No event ID");
       toast.error("Event information is missing");
       return;
     }
 
+    if (isLoadingUser) {
+      console.log("Purchase failed: Still loading user");
+      toast.error("Please wait while we load your account information");
+      return;
+    }
+
     if (!currentUserId) {
-      toast.error("User information is missing. Please log in again.");
+      console.log("Purchase failed: No user ID found");
+      toast.error("Please log out and log back in to continue");
+      return;
+    }
+
+    if (!user) {
+      console.log("Purchase failed: No authenticated user");
+      toast.error("Please log in to purchase tickets");
+      navigate("/login");
       return;
     }
     
+    // Log successful validation
+    console.log("All validations passed. Navigating to payment with:", {
+      event: id,
+      sector: selectedSector.sector_id,
+      qty: quantity,
+      price: selectedSector.price,
+      user: currentUserId
+    });
+    
     // Navigate to payment page with all necessary data
-    navigate(`/payment?event=${id}&sector=${selectedSector.sector_id}&qty=${quantity}&price=${selectedSector.price}&user=${currentUserId}`);
+    const paymentUrl = `/payment?event=${id}&sector=${selectedSector.sector_id}&qty=${quantity}&price=${selectedSector.price}&user=${currentUserId}`;
+    console.log("Navigating to:", paymentUrl);
+    
+    try {
+      navigate(paymentUrl);
+      console.log("Navigation successful");
+    } catch (error) {
+      console.error("Navigation failed:", error);
+      toast.error("Failed to proceed to payment. Please try again.");
+    }
   };
   
   const handleSectorSelection = (sector: SectorPrice) => {
@@ -345,8 +424,9 @@ const EventDetailsScreen = () => {
           <Button 
             className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 mb-4"
             onClick={handlePurchase}
+            disabled={isLoadingUser}
           >
-            Buy Ticket
+            {isLoadingUser ? "Loading..." : "Buy Ticket"}
           </Button>
         )}
       </div>
@@ -362,8 +442,9 @@ const EventDetailsScreen = () => {
           <Button 
             className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 px-6"
             onClick={handlePurchase}
+            disabled={isLoadingUser}
           >
-            Buy Tickets
+            {isLoadingUser ? "Loading..." : "Buy Tickets"}
           </Button>
         </div>
       )}
