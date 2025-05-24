@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -168,7 +169,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Signup function - Updated to save user data to the users table
+  // Signup function - Fixed to use proper auto-incrementing user_id
   const signup = async (name: string, email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     
@@ -182,6 +183,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (err) {
         // Continue even if this fails
       }
+      
+      console.log("Starting signup process for:", email);
       
       // Sign up with Supabase
       const { data, error } = await supabase.auth.signUp({
@@ -198,21 +201,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw error;
       }
       
-      // If we have a user, add them to the users table
+      console.log("Supabase signup successful, user created:", data.user?.id);
+      
+      // If we have a user, add them to the users table with proper auto-incrementing ID
       if (data.user) {
-        // Insert the user into the users table
-        const { error: insertError } = await supabase.from('Users').insert({
-          user_id: parseInt(data.user.id.replace(/-/g, '').substring(0, 9), 16) % 1000000000, // Convert UUID to numeric ID
-          username: name.toLowerCase().replace(/\s+/g, '_'), // Create a username from name
+        console.log("Inserting user into Users table...");
+        
+        // Let the database handle user_id auto-increment, just provide the auth_uid
+        const { data: insertData, error: insertError } = await supabase.from('Users').insert({
+          auth_uid: data.user.id, // Store the Supabase auth UUID
+          username: name.toLowerCase().replace(/\s+/g, '_'),
           email: email,
-          password_hash: 'managed_by_supabase', // We don't store the actual password hash
+          password_hash: 'managed_by_supabase',
           full_name: name,
-          role: 'user' // Default role is user
-        });
+          role: 'user'
+        }).select('user_id').single();
         
         if (insertError) {
           console.error("Failed to insert user into Users table:", insertError);
-          // Note: We continue even if this fails, as the user is still created in auth
+          toast.error("Account created but profile setup failed. Please contact support.");
+        } else {
+          console.log("User successfully inserted with user_id:", insertData?.user_id);
         }
       }
       

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Calendar, MapPin, ArrowLeft, User, Clock, Ticket } from "lucide-react";
@@ -36,43 +35,6 @@ const EventDetailsScreen = () => {
   const [sectorPrices, setSectorPrices] = useState<SectorPrice[]>([]);
   const [selectedSector, setSelectedSector] = useState<SectorPrice | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-  
-  // Simplified user ID handling - fetch once without blocking
-  useEffect(() => {
-    const fetchUserId = async () => {
-      if (!user) {
-        console.log("EventDetails: No authenticated user found");
-        return;
-      }
-      
-      try {
-        console.log("EventDetails: Fetching user ID for auth user:", user.id);
-        
-        const { data, error } = await supabase
-          .from("Users")
-          .select("user_id")
-          .eq("auth_uid", user.id)
-          .maybeSingle();
-          
-        if (error) {
-          console.error("EventDetails: Error fetching user ID:", error);
-          return;
-        }
-        
-        if (data) {
-          console.log("EventDetails: User ID found:", data.user_id);
-          setCurrentUserId(data.user_id);
-        } else {
-          console.log("EventDetails: User not found in Users table");
-        }
-      } catch (error) {
-        console.error("EventDetails: Failed to fetch user ID:", error);
-      }
-    };
-    
-    fetchUserId();
-  }, [user]);
   
   useEffect(() => {
     const fetchEventDetails = async () => {
@@ -175,16 +137,14 @@ const EventDetailsScreen = () => {
       return;
     }
     
-    // Use currentUserId if available, otherwise use 0 as fallback (payment screen can handle this)
-    const userIdForPayment = currentUserId || 0;
+    console.log("EventDetails: User authenticated, proceeding to payment...");
     
-    // Build payment URL
+    // Build payment URL with just the essential data - let PaymentScreen resolve user_id
     const paymentParams = new URLSearchParams({
       event: id,
       sector: selectedSector.sector_id.toString(),
       qty: quantity.toString(),
-      price: selectedSector.price.toString(),
-      user: userIdForPayment.toString()
+      price: selectedSector.price.toString()
     });
     
     const paymentUrl = `/payment?${paymentParams.toString()}`;
@@ -195,7 +155,7 @@ const EventDetailsScreen = () => {
       sector: selectedSector.sector_id,
       qty: quantity,
       price: selectedSector.price,
-      user: userIdForPayment
+      auth_user_id: user.id
     });
     
     // Navigate to payment page

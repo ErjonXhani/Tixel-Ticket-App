@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CreditCard, Check } from "lucide-react";
@@ -29,7 +30,6 @@ const PaymentScreen = () => {
   const sectorId = parseInt(searchParams.get("sector") || "0");
   const quantity = parseInt(searchParams.get("qty") || "1");
   const price = parseFloat(searchParams.get("price") || "0");
-  const urlUserId = parseInt(searchParams.get("user") || "0");
   
   const [isLoading, setIsLoading] = useState(true);
   const [event, setEvent] = useState<Event | null>(null);
@@ -43,7 +43,7 @@ const PaymentScreen = () => {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [actualUserId, setActualUserId] = useState<number | null>(null);
   
-  // Resolve actual user ID on component mount
+  // Improved user ID resolution
   useEffect(() => {
     const resolveUserId = async () => {
       if (!user) {
@@ -54,17 +54,9 @@ const PaymentScreen = () => {
       }
       
       console.log("Payment: Resolving user ID for auth user:", user.id);
-      console.log("Payment: URL user ID:", urlUserId);
       
-      // If we have a valid user ID from URL, use it
-      if (urlUserId > 0) {
-        console.log("Payment: Using URL user ID:", urlUserId);
-        setActualUserId(urlUserId);
-        return;
-      }
-      
-      // Otherwise, try to fetch from database
       try {
+        // Use auth_uid to find the correct user_id in Users table
         const { data, error } = await supabase
           .from("Users")
           .select("user_id")
@@ -73,9 +65,8 @@ const PaymentScreen = () => {
           
         if (error) {
           console.error("Payment: Error fetching user ID:", error);
-          // Create a fallback user ID for testing
-          console.log("Payment: Using fallback user ID");
-          setActualUserId(999);
+          toast.error("Error loading user information. Please try again.");
+          navigate("/home");
           return;
         }
         
@@ -83,17 +74,19 @@ const PaymentScreen = () => {
           console.log("Payment: Database user ID found:", data.user_id);
           setActualUserId(data.user_id);
         } else {
-          console.log("Payment: No database user found, using fallback");
-          setActualUserId(999);
+          console.log("Payment: No database user found for auth_uid:", user.id);
+          toast.error("User profile not found. Please contact support.");
+          navigate("/home");
         }
       } catch (error) {
         console.error("Payment: Failed to resolve user ID:", error);
-        setActualUserId(999);
+        toast.error("Failed to load user information. Please try again.");
+        navigate("/home");
       }
     };
     
     resolveUserId();
-  }, [user, urlUserId, navigate]);
+  }, [user, navigate]);
   
   useEffect(() => {
     const fetchPaymentDetails = async () => {
@@ -148,7 +141,7 @@ const PaymentScreen = () => {
     fetchPaymentDetails();
   }, [eventId, sectorId, navigate, price]);
   
-  // Create a transaction when we have the actual user ID
+  // Create transaction when user ID is resolved
   useEffect(() => {
     const createTransaction = async () => {
       if (!eventId || !sectorId || !price || !user || !actualUserId) {
@@ -158,7 +151,12 @@ const PaymentScreen = () => {
         return;
       }
       
-      console.log("Payment: Creating transaction for user:", actualUserId);
+      if (transactionId) {
+        console.log("Payment: Transaction already created:", transactionId);
+        return;
+      }
+      
+      console.log("Payment: Creating transaction for user_id:", actualUserId);
       
       try {
         const { data, error } = await supabase
@@ -180,12 +178,13 @@ const PaymentScreen = () => {
         }
         
         if (data) {
-          console.log("Payment: Transaction created:", data.transaction_id);
+          console.log("Payment: Transaction created successfully:", data.transaction_id);
           setTransactionId(data.transaction_id);
         }
         
       } catch (error) {
         console.error("Payment: Error in transaction creation:", error);
+        toast.error("Failed to initialize payment");
       }
     };
     
@@ -213,7 +212,7 @@ const PaymentScreen = () => {
       return;
     }
     
-    console.log("Payment: Processing payment...");
+    console.log("Payment: Processing payment with transaction_id:", transactionId, "buyer_id:", actualUserId);
     setIsProcessing(true);
     
     try {
@@ -231,10 +230,11 @@ const PaymentScreen = () => {
         .single();
         
       if (ticketError) {
+        console.error("Payment: Error creating ticket:", ticketError);
         throw ticketError;
       }
       
-      console.log("Payment: Ticket created:", ticketData.ticket_id);
+      console.log("Payment: Ticket created successfully:", ticketData.ticket_id);
       
       // Then update the transaction with the ticket_id and status
       const { error: transactionError } = await supabase
@@ -246,10 +246,11 @@ const PaymentScreen = () => {
         .eq("transaction_id", transactionId);
         
       if (transactionError) {
+        console.error("Payment: Error updating transaction:", transactionError);
         throw transactionError;
       }
       
-      console.log("Payment: Transaction updated successfully");
+      console.log("Payment: Transaction updated successfully to Paid status");
       
       // Success!
       setPaymentSuccess(true);
@@ -439,7 +440,7 @@ const PaymentScreen = () => {
           <Button
             type="submit"
             className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 mt-6"
-            disabled={isProcessing}
+            disabled={isProcessing || !actualUserId}
           >
             {isProcessing ? "Processing..." : "Confirm & Pay"}
           </Button>
