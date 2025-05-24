@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Calendar, MapPin, ArrowLeft, User, Clock, Ticket } from "lucide-react";
@@ -36,21 +37,18 @@ const EventDetailsScreen = () => {
   const [selectedSector, setSelectedSector] = useState<SectorPrice | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
   
-  // Simplified user ID handling with better error recovery
+  // Simplified user ID handling - fetch once without blocking
   useEffect(() => {
     const fetchUserId = async () => {
       if (!user) {
-        console.log("No authenticated user found");
-        setIsLoadingUser(false);
+        console.log("EventDetails: No authenticated user found");
         return;
       }
       
       try {
-        console.log("Fetching user ID for auth user:", user.id);
+        console.log("EventDetails: Fetching user ID for auth user:", user.id);
         
-        // Try to get user from Users table
         const { data, error } = await supabase
           .from("Users")
           .select("user_id")
@@ -58,47 +56,18 @@ const EventDetailsScreen = () => {
           .maybeSingle();
           
         if (error) {
-          console.error("Error fetching user ID:", error);
-          // If there's a database error, we can still proceed with auth user ID as fallback
-          toast.error("Database connection issue. Please try refreshing the page.");
-          setIsLoadingUser(false);
+          console.error("EventDetails: Error fetching user ID:", error);
           return;
         }
         
         if (data) {
-          console.log("User ID found:", data.user_id);
+          console.log("EventDetails: User ID found:", data.user_id);
           setCurrentUserId(data.user_id);
         } else {
-          console.log("User not found in Users table, will try to create one");
-          // Try to create user record
-          const { data: newUser, error: createError } = await supabase
-            .from("Users")
-            .insert({
-              auth_uid: user.id,
-              username: user.email?.split('@')[0] || 'user',
-              email: user.email || '',
-              password_hash: 'managed_by_supabase',
-              full_name: user.name || user.email?.split('@')[0] || 'User',
-              role: 'user'
-            })
-            .select("user_id")
-            .single();
-            
-          if (createError) {
-            console.error("Error creating user:", createError);
-            // Even if user creation fails, we can still proceed
-            console.log("Will proceed without database user ID");
-          } else if (newUser) {
-            console.log("User created successfully with ID:", newUser.user_id);
-            setCurrentUserId(newUser.user_id);
-          }
+          console.log("EventDetails: User not found in Users table");
         }
       } catch (error) {
-        console.error("Failed to fetch user ID:", error);
-        // Don't block the user from proceeding
-        console.log("Will proceed without database user ID");
-      } finally {
-        setIsLoadingUser(false);
+        console.error("EventDetails: Failed to fetch user ID:", error);
       }
     };
     
@@ -184,38 +153,44 @@ const EventDetailsScreen = () => {
   };
   
   const handlePurchase = () => {
-    console.log("Buy tickets clicked - Starting validation...");
+    console.log("EventDetails: Buy tickets clicked - Starting validation...");
     
     // Basic validation checks
     if (!selectedSector) {
-      console.log("Purchase failed: No sector selected");
+      console.log("EventDetails: Purchase failed - No sector selected");
       toast.error("Please select a ticket type");
       return;
     }
     
     if (!id) {
-      console.log("Purchase failed: No event ID");
+      console.log("EventDetails: Purchase failed - No event ID");
       toast.error("Event information is missing");
       return;
     }
 
     if (!user) {
-      console.log("Purchase failed: No authenticated user");
+      console.log("EventDetails: Purchase failed - No authenticated user");
       toast.error("Please log in to purchase tickets");
       navigate("/login");
       return;
     }
-
-    // Don't block if still loading user data
-    if (isLoadingUser) {
-      console.log("Purchase proceeding: User data still loading, will use auth user ID");
-    }
     
-    // Use currentUserId if available, otherwise use a placeholder that payment screen can handle
+    // Use currentUserId if available, otherwise use 0 as fallback (payment screen can handle this)
     const userIdForPayment = currentUserId || 0;
     
-    // Log the data we're sending
-    console.log("All validations passed. Navigating to payment with:", {
+    // Build payment URL
+    const paymentParams = new URLSearchParams({
+      event: id,
+      sector: selectedSector.sector_id.toString(),
+      qty: quantity.toString(),
+      price: selectedSector.price.toString(),
+      user: userIdForPayment.toString()
+    });
+    
+    const paymentUrl = `/payment?${paymentParams.toString()}`;
+    
+    console.log("EventDetails: Navigating to payment with URL:", paymentUrl);
+    console.log("EventDetails: Payment data:", {
       event: id,
       sector: selectedSector.sector_id,
       qty: quantity,
@@ -224,16 +199,7 @@ const EventDetailsScreen = () => {
     });
     
     // Navigate to payment page
-    const paymentUrl = `/payment?event=${id}&sector=${selectedSector.sector_id}&qty=${quantity}&price=${selectedSector.price}&user=${userIdForPayment}`;
-    console.log("Navigating to:", paymentUrl);
-    
-    try {
-      navigate(paymentUrl);
-      console.log("Navigation successful");
-    } catch (error) {
-      console.error("Navigation failed:", error);
-      toast.error("Failed to proceed to payment. Please try again.");
-    }
+    navigate(paymentUrl);
   };
   
   const handleSectorSelection = (sector: SectorPrice) => {
@@ -418,7 +384,6 @@ const EventDetailsScreen = () => {
           <Button 
             className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 mb-4"
             onClick={handlePurchase}
-            disabled={false}
           >
             Buy Ticket
           </Button>
@@ -436,7 +401,6 @@ const EventDetailsScreen = () => {
           <Button 
             className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 px-6"
             onClick={handlePurchase}
-            disabled={false}
           >
             Buy Tickets
           </Button>
