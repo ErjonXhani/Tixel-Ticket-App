@@ -38,28 +38,36 @@ const EventDetailsScreen = () => {
   const [quantity, setQuantity] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   
-  // Get numeric user ID from our Users table
+  // Simplified user ID handling - fetch once without blocking
   useEffect(() => {
     const fetchUserId = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log("EventDetails: No authenticated user found");
+        return;
+      }
       
       try {
+        console.log("EventDetails: Fetching user ID for auth user:", user.id);
+        
         const { data, error } = await supabase
           .from("Users")
           .select("user_id")
           .eq("auth_uid", user.id)
-          .single();
+          .maybeSingle();
           
         if (error) {
-          console.error("Error fetching user ID:", error);
+          console.error("EventDetails: Error fetching user ID:", error);
           return;
         }
         
         if (data) {
+          console.log("EventDetails: User ID found:", data.user_id);
           setCurrentUserId(data.user_id);
+        } else {
+          console.log("EventDetails: User not found in Users table");
         }
       } catch (error) {
-        console.error("Failed to fetch user ID:", error);
+        console.error("EventDetails: Failed to fetch user ID:", error);
       }
     };
     
@@ -145,23 +153,63 @@ const EventDetailsScreen = () => {
   };
   
   const handlePurchase = () => {
+    console.log("EventDetails: Buy tickets clicked - Starting validation...");
+    
+    // Basic validation checks
     if (!selectedSector) {
+      console.log("EventDetails: Purchase failed - No sector selected");
       toast.error("Please select a ticket type");
       return;
     }
     
     if (!id) {
+      console.log("EventDetails: Purchase failed - No event ID");
       toast.error("Event information is missing");
       return;
     }
 
-    if (!currentUserId) {
-      toast.error("User information is missing. Please log in again.");
+    if (!user) {
+      console.log("EventDetails: Purchase failed - No authenticated user");
+      toast.error("Please log in to purchase tickets");
+      navigate("/login");
       return;
     }
     
-    // Navigate to payment page with all necessary data
-    navigate(`/payment?event=${id}&sector=${selectedSector.sector_id}&qty=${quantity}&price=${selectedSector.price}&user=${currentUserId}`);
+    // Use currentUserId if available, otherwise use 0 as fallback (payment screen can handle this)
+    const userIdForPayment = currentUserId || 0;
+    
+    // Build payment URL
+    const paymentParams = new URLSearchParams({
+      event: id,
+      sector: selectedSector.sector_id.toString(),
+      qty: quantity.toString(),
+      price: selectedSector.price.toString(),
+      user: userIdForPayment.toString()
+    });
+    
+    const paymentUrl = `/payment?${paymentParams.toString()}`;
+    
+    console.log("EventDetails: Navigating to payment with URL:", paymentUrl);
+    console.log("EventDetails: Payment data:", {
+      event: id,
+      sector: selectedSector.sector_id,
+      qty: quantity,
+      price: selectedSector.price,
+      user: userIdForPayment
+    });
+    
+    // Navigate to payment page
+    navigate(paymentUrl);
+  };
+  
+  const handleSectorSelection = (sector: SectorPrice) => {
+    if (sector.available_tickets <= 0) {
+      toast.error("Sold Out", {
+        description: "This sector is currently sold out. Please try another sector.",
+      });
+      return;
+    }
+    setSelectedSector(sector);
   };
   
   // Format date for display
@@ -269,7 +317,7 @@ const EventDetailsScreen = () => {
           <p className="text-gray-700">{event.description || "No description available."}</p>
         </div>
         
-        {/* Ticket selection - Show real sectors */}
+        {/* Ticket selection */}
         <div className="mb-6">
           <div className="flex items-center mb-3">
             <Ticket className="w-5 h-5 mr-2 text-[#ff4b00]" />
@@ -286,17 +334,11 @@ const EventDetailsScreen = () => {
                       ? "border-[#ff4b00] bg-[#ff4b00]/5" 
                       : "border-gray-200"
                   }`}
-                  onClick={() => setSelectedSector(sector)}
+                  onClick={() => handleSectorSelection(sector)}
                 >
                   <div className="flex justify-between items-center">
                     <div>
                       <h3 className="font-medium">{sector.sector_name}</h3>
-                      <p className="text-sm text-gray-500">
-                        {sector.available_tickets > 0 
-                          ? `${sector.available_tickets} tickets available` 
-                          : "Sold out"
-                        }
-                      </p>
                     </div>
                     <div className="text-lg font-semibold">${sector.price.toFixed(2)}</div>
                   </div>
@@ -311,7 +353,7 @@ const EventDetailsScreen = () => {
         </div>
         
         {/* Quantity selector */}
-        {sectorPrices.length > 0 && (
+        {sectorPrices.length > 0 && selectedSector && (
           <div className="mb-8">
             <h2 className="text-lg font-semibold mb-3">Quantity</h2>
             
@@ -329,7 +371,7 @@ const EventDetailsScreen = () => {
               <button 
                 className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center"
                 onClick={() => handleQuantityChange(1)}
-                disabled={quantity >= 10 || (selectedSector && quantity >= selectedSector.available_tickets)}
+                disabled={quantity >= 10}
               >
                 +
               </button>
@@ -338,7 +380,7 @@ const EventDetailsScreen = () => {
         )}
         
         {/* Buy Ticket Button */}
-        {sectorPrices.length > 0 && selectedSector && selectedSector.available_tickets > 0 && (
+        {sectorPrices.length > 0 && selectedSector && (
           <Button 
             className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 mb-4"
             onClick={handlePurchase}
@@ -349,17 +391,16 @@ const EventDetailsScreen = () => {
       </div>
       
       {/* Checkout bar */}
-      {sectorPrices.length > 0 && (
+      {sectorPrices.length > 0 && selectedSector && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 safe-bottom flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-500">Total Price</p>
-            <p className="text-xl font-bold">${selectedSector ? (selectedSector.price * quantity).toFixed(2) : "0.00"}</p>
+            <p className="text-xl font-bold">${(selectedSector.price * quantity).toFixed(2)}</p>
           </div>
           
           <Button 
             className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 px-6"
             onClick={handlePurchase}
-            disabled={!selectedSector || selectedSector.available_tickets <= 0}
           >
             Buy Tickets
           </Button>

@@ -3,24 +3,9 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-
-// Mock event data (in a real app, we'd fetch this from an API)
-const mockEvent = {
-  id: 1,
-  title: "Summer Music Festival",
-  description: "Experience the best of summer with live performances from top artists across three stages.",
-  location: "Central Park, New York",
-  venue: "Great Lawn",
-  date: "2023-06-15",
-  time: "12:00",
-  endTime: "22:00",
-  imageUrl: "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=800&auto=format&fit=crop",
-  category: "Music",
-  organizer: "NYC Events",
-  price: "45",
-  capacity: "2000",
-};
+import { supabase } from "@/integrations/supabase/client";
 
 const categories = [
   "Music",
@@ -34,36 +19,97 @@ const categories = [
   "Other"
 ];
 
+interface Venue {
+  venue_id: number;
+  name: string;
+}
+
 const AdminEventForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEditing = !!id;
   
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    location: "",
-    venue: "",
-    date: "",
-    time: "",
-    endTime: "",
-    imageUrl: "",
+    organizer_name: "",
+    event_date: "",
+    image: "",
     category: "",
-    organizer: "",
-    price: "",
-    capacity: "",
+    venue_id: "",
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   
-  // If editing, fetch event data
   useEffect(() => {
+    fetchVenues();
     if (isEditing) {
-      // In a real app, we'd fetch the event data
-      // For now, just use our mock data
-      setFormData(mockEvent);
+      fetchEventData();
     }
   }, [isEditing]);
+
+  const fetchVenues = async () => {
+    try {
+      console.log("Fetching venues...");
+      const { data, error } = await supabase
+        .from("Venues")
+        .select("venue_id, name")
+        .order("name");
+
+      if (error) {
+        console.error("Error fetching venues:", error);
+        throw error;
+      }
+      
+      console.log("Venues fetched:", data);
+      setVenues(data || []);
+    } catch (error) {
+      console.error("Error fetching venues:", error);
+      toast.error("Failed to fetch venues");
+    }
+  };
+
+  const fetchEventData = async () => {
+    if (!id) return;
+
+    try {
+      setLoading(true);
+      console.log("Fetching event data for ID:", id);
+      
+      const { data, error } = await supabase
+        .from("Events")
+        .select("*")
+        .eq("event_id", parseInt(id))
+        .single();
+
+      if (error) {
+        console.error("Error fetching event:", error);
+        throw error;
+      }
+
+      if (data) {
+        console.log("Event data fetched:", data);
+        setFormData({
+          title: data.title,
+          description: data.description || "",
+          organizer_name: data.organizer_name || "",
+          event_date: data.event_date ? new Date(data.event_date).toISOString().slice(0, 16) : "",
+          image: data.image || "",
+          category: data.category || "",
+          venue_id: data.venue_id?.toString() || "",
+        });
+        toast.success("Event data loaded successfully");
+      }
+    } catch (error) {
+      console.error("Error fetching event data:", error);
+      toast.error("Failed to fetch event data");
+      navigate('/admin/events');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -75,41 +121,91 @@ const AdminEventForm = () => {
     setIsSubmitting(true);
     
     try {
-      // In a real app, we'd make an API call to save the event
-      // const endpoint = isEditing ? `/api/events/${id}` : '/api/events';
-      // const method = isEditing ? 'PUT' : 'POST';
-      // const response = await fetch(endpoint, {
-      //   method,
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(formData)
-      // });
+      console.log("Submitting form data:", formData);
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Validate required fields
+      if (!formData.title || !formData.event_date || !formData.venue_id) {
+        toast.error("Please fill in all required fields");
+        return;
+      }
+
+      const eventData = {
+        title: formData.title,
+        description: formData.description,
+        organizer_name: formData.organizer_name,
+        event_date: new Date(formData.event_date).toISOString(),
+        image: formData.image,
+        category: formData.category,
+        venue_id: parseInt(formData.venue_id),
+      };
+
+      console.log("Processed event data:", eventData);
+
+      if (isEditing) {
+        const { error } = await supabase
+          .from("Events")
+          .update(eventData)
+          .eq("event_id", parseInt(id!));
+
+        if (error) {
+          console.error("Error updating event:", error);
+          throw error;
+        }
+        
+        console.log("Event updated successfully");
+        toast.success("Event updated successfully!");
+      } else {
+        const { error } = await supabase
+          .from("Events")
+          .insert(eventData);
+
+        if (error) {
+          console.error("Error creating event:", error);
+          throw error;
+        }
+        
+        console.log("Event created successfully");
+        toast.success("Event created successfully!");
+      }
       
-      toast.success(`Event ${isEditing ? 'updated' : 'created'} successfully!`);
-      navigate('/admin');
+      navigate('/admin/events');
     } catch (error) {
       console.error('Error saving event:', error);
-      toast.error(`Failed to ${isEditing ? 'update' : 'create'} event. Please try again.`);
+      
+      // More specific error messages
+      if (error.message?.includes('permission')) {
+        toast.error("Permission denied. Please check your admin privileges.");
+      } else if (error.message?.includes('foreign key')) {
+        toast.error("Invalid venue selection. Please choose a valid venue.");
+      } else {
+        toast.error(`Failed to ${isEditing ? 'update' : 'create'} event. Please try again.`);
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="w-8 h-8 border-4 border-[#ff4b00] rounded-full border-t-transparent animate-spin"></div>
+      </div>
+    );
+  }
   
   return (
-    <div>
+    <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">
         {isEditing ? 'Edit Event' : 'Create New Event'}
       </h1>
       
-      <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="bg-white rounded-lg shadow-sm p-4 md:p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Event title */}
             <div className="space-y-2 md:col-span-2">
               <label htmlFor="title" className="font-medium">
-                Event Title
+                Event Title *
               </label>
               <Input
                 id="title"
@@ -126,15 +222,14 @@ const AdminEventForm = () => {
               <label htmlFor="description" className="font-medium">
                 Description
               </label>
-              <textarea
+              <Textarea
                 id="description"
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
                 placeholder="Event description"
                 rows={4}
-                className="w-full rounded-md border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-primary"
-                required
+                className="resize-none"
               />
             </div>
             
@@ -148,7 +243,7 @@ const AdminEventForm = () => {
                 name="category"
                 value={formData.category}
                 onChange={handleChange}
-                className="w-full rounded-md border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full rounded-md border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-[#ff4b00]"
                 required
               >
                 <option value="">Select a category</option>
@@ -162,147 +257,73 @@ const AdminEventForm = () => {
             
             {/* Organizer */}
             <div className="space-y-2">
-              <label htmlFor="organizer" className="font-medium">
+              <label htmlFor="organizer_name" className="font-medium">
                 Organizer
               </label>
               <Input
-                id="organizer"
-                name="organizer"
-                value={formData.organizer}
+                id="organizer_name"
+                name="organizer_name"
+                value={formData.organizer_name}
                 onChange={handleChange}
                 placeholder="Organizer name"
                 required
               />
             </div>
             
-            {/* Location */}
-            <div className="space-y-2">
-              <label htmlFor="location" className="font-medium">
-                Location
-              </label>
-              <Input
-                id="location"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                placeholder="City, State"
-                required
-              />
-            </div>
-            
             {/* Venue */}
             <div className="space-y-2">
-              <label htmlFor="venue" className="font-medium">
-                Venue
+              <label htmlFor="venue_id" className="font-medium">
+                Venue *
               </label>
-              <Input
-                id="venue"
-                name="venue"
-                value={formData.venue}
+              <select
+                id="venue_id"
+                name="venue_id"
+                value={formData.venue_id}
                 onChange={handleChange}
-                placeholder="Venue name"
+                className="w-full rounded-md border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-[#ff4b00]"
                 required
-              />
+              >
+                <option value="">Select a venue</option>
+                {venues.map(venue => (
+                  <option key={venue.venue_id} value={venue.venue_id}>
+                    {venue.name}
+                  </option>
+                ))}
+              </select>
             </div>
             
             {/* Date */}
             <div className="space-y-2">
-              <label htmlFor="date" className="font-medium">
-                Date
+              <label htmlFor="event_date" className="font-medium">
+                Event Date & Time *
               </label>
               <Input
-                id="date"
-                name="date"
-                type="date"
-                value={formData.date}
+                id="event_date"
+                name="event_date"
+                type="datetime-local"
+                value={formData.event_date}
                 onChange={handleChange}
-                required
-              />
-            </div>
-            
-            {/* Time */}
-            <div className="space-y-2">
-              <label htmlFor="time" className="font-medium">
-                Start Time
-              </label>
-              <Input
-                id="time"
-                name="time"
-                type="time"
-                value={formData.time}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            
-            {/* End Time */}
-            <div className="space-y-2">
-              <label htmlFor="endTime" className="font-medium">
-                End Time
-              </label>
-              <Input
-                id="endTime"
-                name="endTime"
-                type="time"
-                value={formData.endTime}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            
-            {/* Price */}
-            <div className="space-y-2">
-              <label htmlFor="price" className="font-medium">
-                Base Ticket Price ($)
-              </label>
-              <Input
-                id="price"
-                name="price"
-                type="number"
-                value={formData.price}
-                onChange={handleChange}
-                placeholder="0.00"
-                min="0"
-                step="0.01"
-                required
-              />
-            </div>
-            
-            {/* Capacity */}
-            <div className="space-y-2">
-              <label htmlFor="capacity" className="font-medium">
-                Maximum Capacity
-              </label>
-              <Input
-                id="capacity"
-                name="capacity"
-                type="number"
-                value={formData.capacity}
-                onChange={handleChange}
-                placeholder="100"
-                min="1"
                 required
               />
             </div>
             
             {/* Image URL */}
             <div className="space-y-2 md:col-span-2">
-              <label htmlFor="imageUrl" className="font-medium">
+              <label htmlFor="image" className="font-medium">
                 Image URL
               </label>
               <Input
-                id="imageUrl"
-                name="imageUrl"
-                value={formData.imageUrl}
+                id="image"
+                name="image"
+                value={formData.image}
                 onChange={handleChange}
                 placeholder="https://example.com/image.jpg"
-                required
               />
-              {formData.imageUrl && (
+              {formData.image && (
                 <div className="mt-2">
                   <p className="text-sm mb-1">Preview:</p>
                   <img 
-                    src={formData.imageUrl} 
+                    src={formData.image} 
                     alt="Event preview" 
                     className="h-32 object-cover rounded-md"
                     onError={(e) => {
@@ -315,20 +336,28 @@ const AdminEventForm = () => {
             </div>
           </div>
           
-          <div className="flex justify-end space-x-3 mt-8 pt-4 border-t">
+          <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 mt-8 pt-4 border-t">
             <Button 
               type="button" 
               variant="outline"
-              onClick={() => navigate('/admin')}
+              onClick={() => navigate('/admin/events')}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
             <Button 
               type="submit"
-              className="bg-primary"
+              className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 w-full sm:w-auto"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Saving...' : isEditing ? 'Update Event' : 'Create Event'}
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white rounded-full border-t-transparent animate-spin mr-2" />
+                  {isEditing ? 'Updating...' : 'Creating...'}
+                </>
+              ) : (
+                isEditing ? 'Update Event' : 'Create Event'
+              )}
             </Button>
           </div>
         </form>
