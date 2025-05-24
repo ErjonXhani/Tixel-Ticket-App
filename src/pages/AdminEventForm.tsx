@@ -3,24 +3,9 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-
-// Mock event data (in a real app, we'd fetch this from an API)
-const mockEvent = {
-  id: 1,
-  title: "Summer Music Festival",
-  description: "Experience the best of summer with live performances from top artists across three stages.",
-  location: "Central Park, New York",
-  venue: "Great Lawn",
-  date: "2023-06-15",
-  time: "12:00",
-  endTime: "22:00",
-  imageUrl: "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=800&auto=format&fit=crop",
-  category: "Music",
-  organizer: "NYC Events",
-  price: "45",
-  capacity: "2000",
-};
+import { supabase } from "@/integrations/supabase/client";
 
 const categories = [
   "Music",
@@ -34,36 +19,79 @@ const categories = [
   "Other"
 ];
 
+interface Venue {
+  venue_id: number;
+  name: string;
+}
+
 const AdminEventForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEditing = !!id;
   
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    location: "",
-    venue: "",
-    date: "",
-    time: "",
-    endTime: "",
-    imageUrl: "",
+    organizer_name: "",
+    event_date: "",
+    image: "",
     category: "",
-    organizer: "",
-    price: "",
-    capacity: "",
+    venue_id: "",
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // If editing, fetch event data
   useEffect(() => {
+    fetchVenues();
     if (isEditing) {
-      // In a real app, we'd fetch the event data
-      // For now, just use our mock data
-      setFormData(mockEvent);
+      fetchEventData();
     }
   }, [isEditing]);
+
+  const fetchVenues = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("Venues")
+        .select("venue_id, name")
+        .order("name");
+
+      if (error) throw error;
+      setVenues(data || []);
+    } catch (error) {
+      console.error("Error fetching venues:", error);
+      toast.error("Failed to fetch venues");
+    }
+  };
+
+  const fetchEventData = async () => {
+    if (!id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("Events")
+        .select("*")
+        .eq("event_id", parseInt(id))
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setFormData({
+          title: data.title,
+          description: data.description || "",
+          organizer_name: data.organizer_name || "",
+          event_date: data.event_date ? new Date(data.event_date).toISOString().slice(0, 16) : "",
+          image: data.image || "",
+          category: data.category || "",
+          venue_id: data.venue_id?.toString() || "",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching event data:", error);
+      toast.error("Failed to fetch event data");
+    }
+  };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -75,20 +103,33 @@ const AdminEventForm = () => {
     setIsSubmitting(true);
     
     try {
-      // In a real app, we'd make an API call to save the event
-      // const endpoint = isEditing ? `/api/events/${id}` : '/api/events';
-      // const method = isEditing ? 'PUT' : 'POST';
-      // const response = await fetch(endpoint, {
-      //   method,
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(formData)
-      // });
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const eventData = {
+        title: formData.title,
+        description: formData.description,
+        organizer_name: formData.organizer_name,
+        event_date: new Date(formData.event_date).toISOString(),
+        image: formData.image,
+        category: formData.category,
+        venue_id: parseInt(formData.venue_id),
+      };
+
+      if (isEditing) {
+        const { error } = await supabase
+          .from("Events")
+          .update(eventData)
+          .eq("event_id", parseInt(id!));
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("Events")
+          .insert(eventData);
+
+        if (error) throw error;
+      }
       
       toast.success(`Event ${isEditing ? 'updated' : 'created'} successfully!`);
-      navigate('/admin');
+      navigate('/admin/events');
     } catch (error) {
       console.error('Error saving event:', error);
       toast.error(`Failed to ${isEditing ? 'update' : 'create'} event. Please try again.`);
@@ -126,14 +167,13 @@ const AdminEventForm = () => {
               <label htmlFor="description" className="font-medium">
                 Description
               </label>
-              <textarea
+              <Textarea
                 id="description"
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
                 placeholder="Event description"
                 rows={4}
-                className="w-full rounded-md border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-primary"
                 required
               />
             </div>
@@ -148,7 +188,7 @@ const AdminEventForm = () => {
                 name="category"
                 value={formData.category}
                 onChange={handleChange}
-                className="w-full rounded-md border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full rounded-md border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-[#ff4b00]"
                 required
               >
                 <option value="">Select a category</option>
@@ -162,147 +202,74 @@ const AdminEventForm = () => {
             
             {/* Organizer */}
             <div className="space-y-2">
-              <label htmlFor="organizer" className="font-medium">
+              <label htmlFor="organizer_name" className="font-medium">
                 Organizer
               </label>
               <Input
-                id="organizer"
-                name="organizer"
-                value={formData.organizer}
+                id="organizer_name"
+                name="organizer_name"
+                value={formData.organizer_name}
                 onChange={handleChange}
                 placeholder="Organizer name"
                 required
               />
             </div>
             
-            {/* Location */}
-            <div className="space-y-2">
-              <label htmlFor="location" className="font-medium">
-                Location
-              </label>
-              <Input
-                id="location"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                placeholder="City, State"
-                required
-              />
-            </div>
-            
             {/* Venue */}
             <div className="space-y-2">
-              <label htmlFor="venue" className="font-medium">
+              <label htmlFor="venue_id" className="font-medium">
                 Venue
               </label>
-              <Input
-                id="venue"
-                name="venue"
-                value={formData.venue}
+              <select
+                id="venue_id"
+                name="venue_id"
+                value={formData.venue_id}
                 onChange={handleChange}
-                placeholder="Venue name"
+                className="w-full rounded-md border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-[#ff4b00]"
                 required
-              />
+              >
+                <option value="">Select a venue</option>
+                {venues.map(venue => (
+                  <option key={venue.venue_id} value={venue.venue_id}>
+                    {venue.name}
+                  </option>
+                ))}
+              </select>
             </div>
             
             {/* Date */}
             <div className="space-y-2">
-              <label htmlFor="date" className="font-medium">
-                Date
+              <label htmlFor="event_date" className="font-medium">
+                Event Date & Time
               </label>
               <Input
-                id="date"
-                name="date"
-                type="date"
-                value={formData.date}
+                id="event_date"
+                name="event_date"
+                type="datetime-local"
+                value={formData.event_date}
                 onChange={handleChange}
-                required
-              />
-            </div>
-            
-            {/* Time */}
-            <div className="space-y-2">
-              <label htmlFor="time" className="font-medium">
-                Start Time
-              </label>
-              <Input
-                id="time"
-                name="time"
-                type="time"
-                value={formData.time}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            
-            {/* End Time */}
-            <div className="space-y-2">
-              <label htmlFor="endTime" className="font-medium">
-                End Time
-              </label>
-              <Input
-                id="endTime"
-                name="endTime"
-                type="time"
-                value={formData.endTime}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            
-            {/* Price */}
-            <div className="space-y-2">
-              <label htmlFor="price" className="font-medium">
-                Base Ticket Price ($)
-              </label>
-              <Input
-                id="price"
-                name="price"
-                type="number"
-                value={formData.price}
-                onChange={handleChange}
-                placeholder="0.00"
-                min="0"
-                step="0.01"
-                required
-              />
-            </div>
-            
-            {/* Capacity */}
-            <div className="space-y-2">
-              <label htmlFor="capacity" className="font-medium">
-                Maximum Capacity
-              </label>
-              <Input
-                id="capacity"
-                name="capacity"
-                type="number"
-                value={formData.capacity}
-                onChange={handleChange}
-                placeholder="100"
-                min="1"
                 required
               />
             </div>
             
             {/* Image URL */}
             <div className="space-y-2 md:col-span-2">
-              <label htmlFor="imageUrl" className="font-medium">
+              <label htmlFor="image" className="font-medium">
                 Image URL
               </label>
               <Input
-                id="imageUrl"
-                name="imageUrl"
-                value={formData.imageUrl}
+                id="image"
+                name="image"
+                value={formData.image}
                 onChange={handleChange}
                 placeholder="https://example.com/image.jpg"
                 required
               />
-              {formData.imageUrl && (
+              {formData.image && (
                 <div className="mt-2">
                   <p className="text-sm mb-1">Preview:</p>
                   <img 
-                    src={formData.imageUrl} 
+                    src={formData.image} 
                     alt="Event preview" 
                     className="h-32 object-cover rounded-md"
                     onError={(e) => {
@@ -319,13 +286,13 @@ const AdminEventForm = () => {
             <Button 
               type="button" 
               variant="outline"
-              onClick={() => navigate('/admin')}
+              onClick={() => navigate('/admin/events')}
             >
               Cancel
             </Button>
             <Button 
               type="submit"
-              className="bg-primary"
+              className="bg-[#ff4b00] hover:bg-[#ff4b00]/90"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Saving...' : isEditing ? 'Update Event' : 'Create Event'}

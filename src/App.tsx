@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
 import MobileLayout from "./components/layouts/MobileLayout";
+import AdminLayout from "./components/layouts/AdminLayout";
 
 import SplashScreen from "./pages/SplashScreen";
 import LoginScreen from "./pages/LoginScreen";
@@ -13,8 +14,15 @@ import EventsScreen from "./pages/EventsScreen";
 import EventDetailsScreen from "./pages/EventDetailsScreen";
 import PaymentScreen from "./pages/PaymentScreen";
 import OnboardingScreen from "./pages/OnboardingScreen";
-import AdminScreen from "./pages/AdminScreen";
 import ProfileScreen from "./pages/ProfileScreen";
+
+// Admin components
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminEventsPage from "./pages/AdminEventsPage";
+import AdminEventForm from "./pages/AdminEventForm";
+import AdminVenuesPage from "./pages/AdminVenuesPage";
+import AdminSectorsPage from "./pages/AdminSectorsPage";
+import AdminPricingPage from "./pages/AdminPricingPage";
 
 function App() {
   const { user, loading, checkAuth } = useAuth();
@@ -58,8 +66,16 @@ function App() {
           <Route path="/resell" element={user ? <div className="p-6"><h1 className="text-xl font-bold mb-4">Resell Tickets</h1><p>Resell tickets feature coming soon.</p></div> : <Navigate to="/login" />} />
         </Route>
         
-        {/* Admin route */}
-        <Route path="/admin" element={user?.role === "admin" ? <AdminScreen /> : <Navigate to="/login" />} />
+        {/* Admin routes with Admin Layout */}
+        <Route element={<AdminLayout />}>
+          <Route path="/admin" element={user?.role === "admin" ? <AdminDashboard /> : <Navigate to="/login" />} />
+          <Route path="/admin/events" element={user?.role === "admin" ? <AdminEventsPage /> : <Navigate to="/login" />} />
+          <Route path="/admin/events/create" element={user?.role === "admin" ? <AdminEventForm /> : <Navigate to="/login" />} />
+          <Route path="/admin/events/edit/:id" element={user?.role === "admin" ? <AdminEventForm /> : <Navigate to="/login" />} />
+          <Route path="/admin/venues" element={user?.role === "admin" ? <AdminVenuesPage /> : <Navigate to="/login" />} />
+          <Route path="/admin/sectors" element={user?.role === "admin" ? <AdminSectorsPage /> : <Navigate to="/login" />} />
+          <Route path="/admin/pricing" element={user?.role === "admin" ? <AdminPricingPage /> : <Navigate to="/login" />} />
+        </Route>
       </Routes>
       <Toaster />
     </>
