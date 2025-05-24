@@ -67,7 +67,7 @@ const LoginScreen = () => {
                   Password
                 </label>
                 <a href="#" className="text-sm text-primary hover:underline">
-                  Forgot password?
+                  Forgot Password?
                 </a>
               </div>
               <Input
