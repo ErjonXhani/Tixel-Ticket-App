@@ -42,6 +42,7 @@ const EventDetailsScreen = () => {
   useEffect(() => {
     const fetchUserId = async () => {
       if (!user) {
+        console.log("No authenticated user found");
         setIsLoadingUser(false);
         return;
       }
@@ -68,7 +69,7 @@ const EventDetailsScreen = () => {
                 username: user.email?.split('@')[0] || 'user',
                 email: user.email || '',
                 password_hash: 'managed_by_supabase',
-                full_name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+                full_name: user.name || user.email?.split('@')[0] || 'User',
                 role: 'user'
               })
               .select("user_id")
