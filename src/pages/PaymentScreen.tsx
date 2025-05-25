@@ -41,11 +41,11 @@ const PaymentScreen = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [transactionId, setTransactionId] = useState<number | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [actualUserId, setActualUserId] = useState<number | null>(null);
+  const [validatedUserId, setValidatedUserId] = useState<number | null>(null);
   
-  // Resolve actual user ID on component mount
+  // Validate user ID from URL and cross-check with auth
   useEffect(() => {
-    const resolveUserId = async () => {
+    const validateUserId = async () => {
       if (!user) {
         console.log("Payment: No authenticated user");
         toast.error("Please log in to complete payment");
@@ -53,46 +53,49 @@ const PaymentScreen = () => {
         return;
       }
       
-      console.log("Payment: Resolving user ID for auth user:", user.id);
-      console.log("Payment: URL user ID:", urlUserId);
+      console.log("Payment: Validating user ID:", urlUserId, "for auth user:", user.id);
       
-      // If we have a valid user ID from URL, use it
-      if (urlUserId > 0) {
-        console.log("Payment: Using URL user ID:", urlUserId);
-        setActualUserId(urlUserId);
+      // Basic validation
+      if (!urlUserId || urlUserId === 0) {
+        console.error("Payment: Invalid user ID from URL:", urlUserId);
+        toast.error("Invalid user information");
+        navigate("/events");
         return;
       }
       
-      // Otherwise, try to fetch from database
       try {
+        // Verify that the user ID from URL matches the authenticated user
         const { data, error } = await supabase
           .from("Users")
-          .select("user_id")
+          .select("user_id, auth_uid")
+          .eq("user_id", urlUserId)
           .eq("auth_uid", user.id)
           .maybeSingle();
           
         if (error) {
-          console.error("Payment: Error fetching user ID:", error);
-          // Create a fallback user ID for testing
-          console.log("Payment: Using fallback user ID");
-          setActualUserId(999);
+          console.error("Payment: Error validating user ID:", error);
+          toast.error("Error validating user information");
+          navigate("/events");
           return;
         }
         
         if (data) {
-          console.log("Payment: Database user ID found:", data.user_id);
-          setActualUserId(data.user_id);
+          console.log("Payment: User ID validated successfully:", data.user_id);
+          setValidatedUserId(data.user_id);
         } else {
-          console.log("Payment: No database user found, using fallback");
-          setActualUserId(999);
+          console.error("Payment: User ID validation failed - mismatch between URL and auth");
+          toast.error("User information mismatch. Please try again.");
+          navigate("/events");
+          return;
         }
       } catch (error) {
-        console.error("Payment: Failed to resolve user ID:", error);
-        setActualUserId(999);
+        console.error("Payment: Failed to validate user ID:", error);
+        toast.error("Failed to validate user information");
+        navigate("/events");
       }
     };
     
-    resolveUserId();
+    validateUserId();
   }, [user, urlUserId, navigate]);
   
   useEffect(() => {
@@ -148,23 +151,40 @@ const PaymentScreen = () => {
     fetchPaymentDetails();
   }, [eventId, sectorId, navigate, price]);
   
-  // Create a transaction when we have the actual user ID
+  // Create transaction when we have validated user ID
   useEffect(() => {
     const createTransaction = async () => {
-      if (!eventId || !sectorId || !price || !user || !actualUserId) {
-        console.log("Payment: Cannot create transaction, missing data:", {
-          eventId, sectorId, price, user: !!user, actualUserId
-        });
-        return;
+      if (!eventId || !sectorId || !price || !validatedUserId || transactionId) {
+        return; // Don't create if already exists or missing data
       }
       
-      console.log("Payment: Creating transaction for user:", actualUserId);
+      console.log("Payment: Creating transaction for validated user:", validatedUserId);
       
       try {
+        // Check if transaction already exists to prevent duplicates
+        const { data: existingTransaction, error: checkError } = await supabase
+          .from("Transactions")
+          .select("transaction_id")
+          .eq("buyer_id", validatedUserId)
+          .eq("total_amount", price * quantity)
+          .eq("payment_status", "Pending")
+          .maybeSingle();
+          
+        if (checkError) {
+          console.error("Payment: Error checking for existing transaction:", checkError);
+        }
+        
+        if (existingTransaction) {
+          console.log("Payment: Using existing transaction:", existingTransaction.transaction_id);
+          setTransactionId(existingTransaction.transaction_id);
+          return;
+        }
+        
+        // Create new transaction
         const { data, error } = await supabase
           .from("Transactions")
           .insert({
-            buyer_id: actualUserId,
+            buyer_id: validatedUserId,
             total_amount: price * quantity,
             payment_method: 'Credit Card',
             payment_status: 'Pending',
@@ -180,20 +200,21 @@ const PaymentScreen = () => {
         }
         
         if (data) {
-          console.log("Payment: Transaction created:", data.transaction_id);
+          console.log("Payment: Transaction created successfully:", data.transaction_id);
           setTransactionId(data.transaction_id);
         }
         
       } catch (error) {
         console.error("Payment: Error in transaction creation:", error);
+        toast.error("Failed to initialize payment");
       }
     };
     
-    if (!isLoading && !transactionId && actualUserId) {
+    if (!isLoading && validatedUserId && !transactionId) {
       createTransaction();
     }
     
-  }, [isLoading, eventId, sectorId, quantity, price, user, transactionId, actualUserId]);
+  }, [isLoading, eventId, sectorId, quantity, price, validatedUserId, transactionId]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,16 +225,16 @@ const PaymentScreen = () => {
     }
     
     if (!transactionId) {
-      toast.error("Transaction information is missing");
+      toast.error("Transaction not initialized. Please try again.");
       return;
     }
     
-    if (!actualUserId) {
-      toast.error("User information is missing");
+    if (!validatedUserId) {
+      toast.error("User validation failed. Please try again.");
       return;
     }
     
-    console.log("Payment: Processing payment...");
+    console.log("Payment: Processing payment for transaction:", transactionId);
     setIsProcessing(true);
     
     try {
@@ -222,7 +243,7 @@ const PaymentScreen = () => {
         .from("Tickets")
         .insert({
           event_id: eventId,
-          owner_id: actualUserId,
+          owner_id: validatedUserId,
           sector_id: sectorId,
           status: 'Reserved',
           ticket_type: sector?.sector_name || 'Standard'
@@ -231,10 +252,11 @@ const PaymentScreen = () => {
         .single();
         
       if (ticketError) {
-        throw ticketError;
+        console.error("Payment: Ticket creation failed:", ticketError);
+        throw new Error("Failed to create ticket");
       }
       
-      console.log("Payment: Ticket created:", ticketData.ticket_id);
+      console.log("Payment: Ticket created successfully:", ticketData.ticket_id);
       
       // Then update the transaction with the ticket_id and status
       const { error: transactionError } = await supabase
@@ -246,10 +268,11 @@ const PaymentScreen = () => {
         .eq("transaction_id", transactionId);
         
       if (transactionError) {
-        throw transactionError;
+        console.error("Payment: Transaction update failed:", transactionError);
+        throw new Error("Failed to update transaction");
       }
       
-      console.log("Payment: Transaction updated successfully");
+      console.log("Payment: Transaction updated to Paid successfully");
       
       // Success!
       setPaymentSuccess(true);
@@ -439,10 +462,17 @@ const PaymentScreen = () => {
           <Button
             type="submit"
             className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 mt-6"
-            disabled={isProcessing}
+            disabled={isProcessing || !transactionId || !validatedUserId}
           >
             {isProcessing ? "Processing..." : "Confirm & Pay"}
           </Button>
+          
+          {/* Show status if transaction not ready */}
+          {!transactionId && validatedUserId && (
+            <p className="text-sm text-gray-500 text-center">
+              Initializing payment...
+            </p>
+          )}
         </form>
       </div>
     </div>

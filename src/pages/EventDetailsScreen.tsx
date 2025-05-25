@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Calendar, MapPin, ArrowLeft, User, Clock, Ticket } from "lucide-react";
@@ -38,7 +37,7 @@ const EventDetailsScreen = () => {
   const [quantity, setQuantity] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   
-  // Simplified user ID handling - fetch once without blocking
+  // Improved user ID fetching with better error handling
   useEffect(() => {
     const fetchUserId = async () => {
       if (!user) {
@@ -57,6 +56,7 @@ const EventDetailsScreen = () => {
           
         if (error) {
           console.error("EventDetails: Error fetching user ID:", error);
+          toast.error("Error loading user information");
           return;
         }
         
@@ -64,10 +64,12 @@ const EventDetailsScreen = () => {
           console.log("EventDetails: User ID found:", data.user_id);
           setCurrentUserId(data.user_id);
         } else {
-          console.log("EventDetails: User not found in Users table");
+          console.log("EventDetails: User not found in Users table for auth_uid:", user.id);
+          toast.error("User not found. Please try logging out and back in.");
         }
       } catch (error) {
         console.error("EventDetails: Failed to fetch user ID:", error);
+        toast.error("Failed to load user information");
       }
     };
     
@@ -155,7 +157,7 @@ const EventDetailsScreen = () => {
   const handlePurchase = () => {
     console.log("EventDetails: Buy tickets clicked - Starting validation...");
     
-    // Basic validation checks
+    // Enhanced validation checks
     if (!selectedSector) {
       console.log("EventDetails: Purchase failed - No sector selected");
       toast.error("Please select a ticket type");
@@ -175,16 +177,19 @@ const EventDetailsScreen = () => {
       return;
     }
     
-    // Use currentUserId if available, otherwise use 0 as fallback (payment screen can handle this)
-    const userIdForPayment = currentUserId || 0;
+    if (!currentUserId) {
+      console.log("EventDetails: Purchase failed - No user ID found");
+      toast.error("User information not loaded. Please try refreshing the page.");
+      return;
+    }
     
-    // Build payment URL
+    // Build payment URL with validated data
     const paymentParams = new URLSearchParams({
       event: id,
       sector: selectedSector.sector_id.toString(),
       qty: quantity.toString(),
       price: selectedSector.price.toString(),
-      user: userIdForPayment.toString()
+      user: currentUserId.toString()
     });
     
     const paymentUrl = `/payment?${paymentParams.toString()}`;
@@ -195,7 +200,7 @@ const EventDetailsScreen = () => {
       sector: selectedSector.sector_id,
       qty: quantity,
       price: selectedSector.price,
-      user: userIdForPayment
+      user: currentUserId
     });
     
     // Navigate to payment page
@@ -379,8 +384,8 @@ const EventDetailsScreen = () => {
           </div>
         )}
         
-        {/* Buy Ticket Button */}
-        {sectorPrices.length > 0 && selectedSector && (
+        {/* Buy Ticket Button - Only show if user ID is loaded */}
+        {sectorPrices.length > 0 && selectedSector && currentUserId && (
           <Button 
             className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 mb-4"
             onClick={handlePurchase}
@@ -388,10 +393,17 @@ const EventDetailsScreen = () => {
             Buy Ticket
           </Button>
         )}
+        
+        {/* Show loading message if user ID not yet loaded */}
+        {sectorPrices.length > 0 && selectedSector && !currentUserId && (
+          <div className="w-full bg-gray-100 p-3 rounded text-center text-gray-600 mb-4">
+            Loading user information...
+          </div>
+        )}
       </div>
       
       {/* Checkout bar */}
-      {sectorPrices.length > 0 && selectedSector && (
+      {sectorPrices.length > 0 && selectedSector && currentUserId && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 safe-bottom flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-500">Total Price</p>
