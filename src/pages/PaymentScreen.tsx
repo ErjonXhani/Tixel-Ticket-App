@@ -64,84 +64,97 @@ const PaymentScreen = () => {
       }
       
       try {
-        // First try: Direct validation - check if the user ID from URL matches the authenticated user
-        const { data: directData, error: directError } = await supabase
-          .from("Users")
-          .select("user_id, auth_uid, email")
-          .eq("user_id", urlUserId)
-          .eq("auth_uid", user.id)
-          .maybeSingle();
-          
-        if (directError) {
-          console.error("Payment: Error in direct user validation:", directError);
-        } else if (directData) {
-          console.log("Payment: Direct user validation successful:", directData.user_id);
-          setValidatedUserId(directData.user_id);
-          return;
-        } else {
-          console.log("Payment: Direct validation failed, trying fallback methods");
-        }
-        
-        // Fallback 1: Check if the user ID exists and belongs to someone with this email
-        const { data: userIdData, error: userIdError } = await supabase
-          .from("Users")
-          .select("user_id, auth_uid, email")
-          .eq("user_id", urlUserId)
-          .maybeSingle();
-          
-        if (userIdError) {
-          console.error("Payment: Error checking user ID:", userIdError);
-        } else if (userIdData && userIdData.email === user.email) {
-          console.log("Payment: User ID validation by email match successful");
-          
-          // Update the auth_uid to match current session
-          if (userIdData.auth_uid !== user.id) {
-            console.log("Payment: Updating auth_uid mismatch");
-            const { error: updateError } = await supabase
-              .from("Users")
-              .update({ auth_uid: user.id })
-              .eq("user_id", urlUserId);
-              
-            if (updateError) {
-              console.error("Payment: Failed to update auth_uid:", updateError);
-            } else {
-              console.log("Payment: Successfully updated auth_uid");
-            }
-          }
-          
-          setValidatedUserId(userIdData.user_id);
-          return;
-        }
-        
-        // Fallback 2: Look up user by email and check if it matches the URL user ID
-        if (user.email) {
-          const { data: emailData, error: emailError } = await supabase
-            .from("Users")
-            .select("user_id, auth_uid, email")
-            .eq("email", user.email)
-            .maybeSingle();
-            
-          if (emailError) {
-            console.error("Payment: Error in email lookup:", emailError);
-          } else if (emailData) {
-            // If the email lookup returns a different user_id than what's in the URL,
-            // use the one from the database as it's more reliable
-            console.log("Payment: Found user by email, using database user_id:", emailData.user_id);
-            setValidatedUserId(emailData.user_id);
-            return;
-          }
-        }
-        
-        // If all validation methods fail
-        console.error("Payment: All user validation methods failed");
-        toast.error("User validation failed. Please try logging out and back in.");
-        navigate("/profile");
-        
-      } catch (error) {
-        console.error("Payment: Failed to validate user ID:", error);
-        toast.error("Failed to validate user information");
-        navigate("/events");
+  console.log("Payment: Starting validateUserId()");
+  console.log("→ user.id:", user?.id);
+  console.log("→ user.email:", user?.email);
+  console.log("→ urlUserId:", urlUserId);
+
+  // Guard clause for missing data
+  if (!user || !user.email || !urlUserId) {
+    console.warn("Missing user, email, or urlUserId — exiting validation");
+    toast.error("User information incomplete. Please log in again.");
+    navigate("/home");
+    return;
+  }
+
+  // ✅ Direct validation
+  const { data: directData, error: directError } = await supabase
+    .from("Users")
+    .select("user_id, auth_uid, email")
+    .eq("user_id", urlUserId)
+    .eq("auth_uid", user.id)
+    .maybeSingle();
+
+  if (directError) {
+    console.error("Direct validation error:", directError);
+  } else if (directData) {
+    console.log("✅ Direct match found:", directData);
+    setValidatedUserId(directData.user_id);
+    return;
+  } else {
+    console.warn("No direct match found — trying fallback by user_id/email");
+  }
+
+  // ✅ Fallback 1: check user_id + email
+  const { data: userIdData, error: userIdError } = await supabase
+    .from("Users")
+    .select("user_id, auth_uid, email")
+    .eq("user_id", urlUserId)
+    .maybeSingle();
+
+  if (userIdError) {
+    console.error("Fallback 1 error:", userIdError);
+  } else if (userIdData && userIdData.email === user.email) {
+    console.log("✅ Fallback 1: Email match successful:", userIdData);
+
+    if (userIdData.auth_uid !== user.id) {
+      console.warn("Updating mismatched auth_uid →", userIdData.auth_uid, "→", user.id);
+      const { error: updateError } = await supabase
+        .from("Users")
+        .update({ auth_uid: user.id })
+        .eq("user_id", urlUserId);
+
+      if (updateError) {
+        console.error("Failed to update auth_uid:", updateError);
+      } else {
+        console.log("✅ auth_uid updated successfully");
       }
+    }
+
+    setValidatedUserId(userIdData.user_id);
+    return;
+  } else {
+    console.warn("Fallback 1 failed — trying fallback by email");
+  }
+
+  // ✅ Fallback 2: lookup by email only
+  const { data: emailData, error: emailError } = await supabase
+    .from("Users")
+    .select("user_id, auth_uid, email")
+    .eq("email", user.email)
+    .maybeSingle();
+
+  if (emailError) {
+    console.error("Fallback 2 error:", emailError);
+  } else if (emailData) {
+    console.log("✅ Fallback 2: Email match successful, overriding user_id:", emailData.user_id);
+    setValidatedUserId(emailData.user_id);
+    return;
+  } else {
+    console.warn("Fallback 2 failed: No user with this email found.");
+  }
+
+  // ❌ Final fallback failed
+  console.error(" All user validation methods failed");
+  toast.error("User validation failed. Please try logging out and back in.");
+  navigate("/home");
+
+} catch (error) {
+  console.error(" Unhandled exception in validateUserId:", error);
+  toast.error("Something went wrong during user validation.");
+  navigate("/events");
+}
+
     };
     
     validateUserId();
