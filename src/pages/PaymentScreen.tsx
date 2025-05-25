@@ -59,7 +59,7 @@ const PaymentScreen = () => {
       if (!urlUserId || urlUserId === 0) {
         console.error("Payment: Invalid user ID from URL:", urlUserId);
         toast.error("Invalid user information");
-        navigate("/home");
+        navigate("/events");
         return;
       }
       
@@ -135,12 +135,12 @@ const PaymentScreen = () => {
         // If all validation methods fail
         console.error("Payment: All user validation methods failed");
         toast.error("User validation failed. Please try logging out and back in.");
-        navigate("/events");
+        navigate("/home");
         
       } catch (error) {
         console.error("Payment: Failed to validate user ID:", error);
         toast.error("Failed to validate user information");
-        navigate("/events");
+        navigate("/home");
       }
     };
     
