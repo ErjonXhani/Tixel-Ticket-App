@@ -42,10 +42,18 @@ const PaymentScreen = () => {
   const [transactionId, setTransactionId] = useState<number | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [validatedUserId, setValidatedUserId] = useState<number | null>(null);
+  const [hasValidated, setHasValidated] = useState(false);
+  const [validationAttempts, setValidationAttempts] = useState(0);
   
-  // Enhanced user ID validation with fallback email lookup
+  // Enhanced user ID validation with better error handling and no unwanted redirects
   useEffect(() => {
     const validateUserId = async () => {
+      // Prevent validation if already successful or too many attempts
+      if (hasValidated || validationAttempts >= 3) {
+        console.log("Payment: Skipping validation - already validated or max attempts reached");
+        return;
+      }
+
       if (!user) {
         console.log("Payment: No authenticated user");
         toast.error("Please log in to complete payment");
@@ -53,8 +61,11 @@ const PaymentScreen = () => {
         return;
       }
       
-      console.log("Payment: Starting user validation for urlUserId:", urlUserId, "auth user:", user.id);
-      
+      console.log("Payment: Starting user validation - attempt:", validationAttempts + 1);
+      console.log("→ user.id:", user?.id);
+      console.log("→ user.email:", user?.email);
+      console.log("→ urlUserId:", urlUserId);
+
       // Basic validation
       if (!urlUserId || urlUserId === 0) {
         console.error("Payment: Invalid user ID from URL:", urlUserId);
@@ -62,103 +73,127 @@ const PaymentScreen = () => {
         navigate("/events");
         return;
       }
-      
+
+      setValidationAttempts(prev => prev + 1);
+
       try {
-  console.log("Payment: Starting validateUserId()");
-  console.log("→ user.id:", user?.id);
-  console.log("→ user.email:", user?.email);
-  console.log("→ urlUserId:", urlUserId);
+        // Add timeout to database queries
+        const queryTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Query timeout')), 5000)
+        );
 
-  // Guard clause for missing data
-  if (!user || !user.email || !urlUserId) {
-    console.warn("Missing user, email, or urlUserId — exiting validation");
-    toast.error("User information incomplete. Please log in again.");
-    navigate("/home");
-    return;
-  }
+        // ✅ Direct validation with timeout
+        const directQuery = supabase
+          .from("Users")
+          .select("user_id, auth_uid, email")
+          .eq("user_id", urlUserId)
+          .eq("auth_uid", user.id)
+          .maybeSingle();
 
-  // ✅ Direct validation
-  const { data: directData, error: directError } = await supabase
-    .from("Users")
-    .select("user_id, auth_uid, email")
-    .eq("user_id", urlUserId)
-    .eq("auth_uid", user.id)
-    .maybeSingle();
+        const { data: directData, error: directError } = await Promise.race([
+          directQuery,
+          queryTimeout
+        ]) as any;
 
-  if (directError) {
-    console.error("Direct validation error:", directError);
-  } else if (directData) {
-    console.log("✅ Direct match found:", directData);
-    setValidatedUserId(directData.user_id);
-    return;
-  } else {
-    console.warn("No direct match found — trying fallback by user_id/email");
-  }
+        if (directError && !directError.message?.includes('timeout')) {
+          console.error("Direct validation error:", directError);
+        } else if (directData) {
+          console.log("✅ Direct match found:", directData);
+          setValidatedUserId(directData.user_id);
+          setHasValidated(true);
+          return;
+        }
 
-  // ✅ Fallback 1: check user_id + email
-  const { data: userIdData, error: userIdError } = await supabase
-    .from("Users")
-    .select("user_id, auth_uid, email")
-    .eq("user_id", urlUserId)
-    .maybeSingle();
+        // ✅ Fallback 1: check user_id + email with timeout
+        const userIdQuery = supabase
+          .from("Users")
+          .select("user_id, auth_uid, email")
+          .eq("user_id", urlUserId)
+          .maybeSingle();
 
-  if (userIdError) {
-    console.error("Fallback 1 error:", userIdError);
-  } else if (userIdData && userIdData.email === user.email) {
-    console.log("✅ Fallback 1: Email match successful:", userIdData);
+        const { data: userIdData, error: userIdError } = await Promise.race([
+          userIdQuery,
+          queryTimeout
+        ]) as any;
 
-    if (userIdData.auth_uid !== user.id) {
-      console.warn("Updating mismatched auth_uid →", userIdData.auth_uid, "→", user.id);
-      const { error: updateError } = await supabase
-        .from("Users")
-        .update({ auth_uid: user.id })
-        .eq("user_id", urlUserId);
+        if (userIdError && !userIdError.message?.includes('timeout')) {
+          console.error("Fallback 1 error:", userIdError);
+        } else if (userIdData && userIdData.email === user.email) {
+          console.log("✅ Fallback 1: Email match successful:", userIdData);
 
-      if (updateError) {
-        console.error("Failed to update auth_uid:", updateError);
-      } else {
-        console.log("✅ auth_uid updated successfully");
+          if (userIdData.auth_uid !== user.id) {
+            console.warn("Updating mismatched auth_uid");
+            try {
+              const { error: updateError } = await supabase
+                .from("Users")
+                .update({ auth_uid: user.id })
+                .eq("user_id", urlUserId);
+
+              if (updateError) {
+                console.error("Failed to update auth_uid:", updateError);
+              } else {
+                console.log("✅ auth_uid updated successfully");
+              }
+            } catch (updateErr) {
+              console.error("Update auth_uid failed:", updateErr);
+            }
+          }
+
+          setValidatedUserId(userIdData.user_id);
+          setHasValidated(true);
+          return;
+        }
+
+        // ✅ Fallback 2: lookup by email only with timeout
+        const emailQuery = supabase
+          .from("Users")
+          .select("user_id, auth_uid, email")
+          .eq("email", user.email)
+          .maybeSingle();
+
+        const { data: emailData, error: emailError } = await Promise.race([
+          emailQuery,
+          queryTimeout
+        ]) as any;
+
+        if (emailError && !emailError.message?.includes('timeout')) {
+          console.error("Fallback 2 error:", emailError);
+        } else if (emailData) {
+          console.log("✅ Fallback 2: Email match successful, using user_id:", emailData.user_id);
+          setValidatedUserId(emailData.user_id);
+          setHasValidated(true);
+          return;
+        }
+
+        // Only fail after 3 attempts
+        if (validationAttempts >= 2) {
+          console.error("❌ All user validation methods failed after 3 attempts");
+          toast.error("User validation failed. Please try refreshing the page.");
+          // Don't redirect - let user try to refresh or navigate manually
+        } else {
+          console.log("🔄 Retrying validation in 2 seconds...");
+          setTimeout(() => {
+            validateUserId();
+          }, 2000);
+        }
+
+      } catch (error) {
+        console.error("🚨 Unhandled exception in validateUserId:", error);
+        if (validationAttempts >= 2) {
+          toast.error("Something went wrong during user validation. Please refresh the page.");
+        } else {
+          setTimeout(() => {
+            validateUserId();
+          }, 2000);
+        }
       }
-    }
-
-    setValidatedUserId(userIdData.user_id);
-    return;
-  } else {
-    console.warn("Fallback 1 failed — trying fallback by email");
-  }
-
-  // ✅ Fallback 2: lookup by email only
-  const { data: emailData, error: emailError } = await supabase
-    .from("Users")
-    .select("user_id, auth_uid, email")
-    .eq("email", user.email)
-    .maybeSingle();
-
-  if (emailError) {
-    console.error("Fallback 2 error:", emailError);
-  } else if (emailData) {
-    console.log("✅ Fallback 2: Email match successful, overriding user_id:", emailData.user_id);
-    setValidatedUserId(emailData.user_id);
-    return;
-  } else {
-    console.warn("Fallback 2 failed: No user with this email found.");
-  }
-
-  // ❌ Final fallback failed
-  console.error(" All user validation methods failed");
-  toast.error("User validation failed. Please try logging out and back in.");
-  navigate("/home");
-
-} catch (error) {
-  console.error(" Unhandled exception in validateUserId:", error);
-  toast.error("Something went wrong during user validation.");
-  navigate("/events");
-}
-
     };
     
-    validateUserId();
-  }, [user, urlUserId, navigate]);
+    // Only run validation if we haven't validated yet and we have a user
+    if (user && !hasValidated && validationAttempts < 3) {
+      validateUserId();
+    }
+  }, [user, urlUserId, hasValidated, validationAttempts]); // Removed navigate from dependencies
   
   // Fetch payment details for the event and sector
   useEffect(() => {
@@ -168,7 +203,7 @@ const PaymentScreen = () => {
       if (!eventId || !sectorId) {
         console.log("Payment: Missing event or sector ID");
         toast.error("Missing payment information");
-        navigate("/home");
+        navigate("/events");
         return;
       }
       
@@ -212,13 +247,13 @@ const PaymentScreen = () => {
     };
     
     fetchPaymentDetails();
-  }, [eventId, sectorId, navigate, price]);
+  }, [eventId, sectorId, price]);
   
   // Create transaction when we have validated user ID
   useEffect(() => {
     const createTransaction = async () => {
-      if (!eventId || !sectorId || !price || !validatedUserId || transactionId) {
-        return; // Don't create if already exists or missing data
+      if (!eventId || !sectorId || !price || !validatedUserId || transactionId || !hasValidated) {
+        return; // Don't create if already exists or missing data or not validated
       }
       
       console.log("Payment: Creating transaction for validated user:", validatedUserId);
@@ -273,11 +308,11 @@ const PaymentScreen = () => {
       }
     };
     
-    if (!isLoading && validatedUserId && !transactionId) {
+    if (!isLoading && hasValidated && validatedUserId && !transactionId) {
       createTransaction();
     }
     
-  }, [isLoading, eventId, sectorId, quantity, price, validatedUserId, transactionId]);
+  }, [isLoading, eventId, sectorId, quantity, price, validatedUserId, transactionId, hasValidated]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -525,21 +560,21 @@ const PaymentScreen = () => {
           <Button
             type="submit"
             className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 mt-6"
-            disabled={isProcessing || !transactionId || !validatedUserId}
+            disabled={isProcessing || !transactionId || !hasValidated}
           >
             {isProcessing ? "Processing..." : "Confirm & Pay"}
           </Button>
           
           {/* Show status if transaction not ready */}
-          {!transactionId && validatedUserId && (
+          {!transactionId && hasValidated && (
             <p className="text-sm text-gray-500 text-center">
               Initializing payment...
             </p>
           )}
           
-          {!validatedUserId && (
+          {!hasValidated && (
             <p className="text-sm text-gray-500 text-center">
-              Validating user information...
+              Validating user information... (Attempt {validationAttempts}/3)
             </p>
           )}
         </form>
