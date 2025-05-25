@@ -135,7 +135,7 @@ const PaymentScreen = () => {
         // If all validation methods fail
         console.error("Payment: All user validation methods failed");
         toast.error("User validation failed. Please try logging out and back in.");
-        navigate("/home");
+        navigate("/profile");
         
       } catch (error) {
         console.error("Payment: Failed to validate user ID:", error);
@@ -155,7 +155,7 @@ const PaymentScreen = () => {
       if (!eventId || !sectorId) {
         console.log("Payment: Missing event or sector ID");
         toast.error("Missing payment information");
-        navigate("/events");
+        navigate("/home");
         return;
       }
       
