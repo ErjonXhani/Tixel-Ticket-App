@@ -43,7 +43,7 @@ const PaymentScreen = () => {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [validatedUserId, setValidatedUserId] = useState<number | null>(null);
   
-  // Validate user ID from URL and cross-check with auth
+  // Enhanced user ID validation with fallback email lookup
   useEffect(() => {
     const validateUserId = async () => {
       if (!user) {
@@ -53,7 +53,7 @@ const PaymentScreen = () => {
         return;
       }
       
-      console.log("Payment: Validating user ID:", urlUserId, "for auth user:", user.id);
+      console.log("Payment: Starting user validation for urlUserId:", urlUserId, "auth user:", user.id);
       
       // Basic validation
       if (!urlUserId || urlUserId === 0) {
@@ -64,30 +64,79 @@ const PaymentScreen = () => {
       }
       
       try {
-        // Verify that the user ID from URL matches the authenticated user
-        const { data, error } = await supabase
+        // First try: Direct validation - check if the user ID from URL matches the authenticated user
+        const { data: directData, error: directError } = await supabase
           .from("Users")
-          .select("user_id, auth_uid")
+          .select("user_id, auth_uid, email")
           .eq("user_id", urlUserId)
           .eq("auth_uid", user.id)
           .maybeSingle();
           
-        if (error) {
-          console.error("Payment: Error validating user ID:", error);
-          toast.error("Error validating user information");
-          navigate("/events");
+        if (directError) {
+          console.error("Payment: Error in direct user validation:", directError);
+        } else if (directData) {
+          console.log("Payment: Direct user validation successful:", directData.user_id);
+          setValidatedUserId(directData.user_id);
+          return;
+        } else {
+          console.log("Payment: Direct validation failed, trying fallback methods");
+        }
+        
+        // Fallback 1: Check if the user ID exists and belongs to someone with this email
+        const { data: userIdData, error: userIdError } = await supabase
+          .from("Users")
+          .select("user_id, auth_uid, email")
+          .eq("user_id", urlUserId)
+          .maybeSingle();
+          
+        if (userIdError) {
+          console.error("Payment: Error checking user ID:", userIdError);
+        } else if (userIdData && userIdData.email === user.email) {
+          console.log("Payment: User ID validation by email match successful");
+          
+          // Update the auth_uid to match current session
+          if (userIdData.auth_uid !== user.id) {
+            console.log("Payment: Updating auth_uid mismatch");
+            const { error: updateError } = await supabase
+              .from("Users")
+              .update({ auth_uid: user.id })
+              .eq("user_id", urlUserId);
+              
+            if (updateError) {
+              console.error("Payment: Failed to update auth_uid:", updateError);
+            } else {
+              console.log("Payment: Successfully updated auth_uid");
+            }
+          }
+          
+          setValidatedUserId(userIdData.user_id);
           return;
         }
         
-        if (data) {
-          console.log("Payment: User ID validated successfully:", data.user_id);
-          setValidatedUserId(data.user_id);
-        } else {
-          console.error("Payment: User ID validation failed - mismatch between URL and auth");
-          toast.error("User information mismatch. Please try again.");
-          navigate("/events");
-          return;
+        // Fallback 2: Look up user by email and check if it matches the URL user ID
+        if (user.email) {
+          const { data: emailData, error: emailError } = await supabase
+            .from("Users")
+            .select("user_id, auth_uid, email")
+            .eq("email", user.email)
+            .maybeSingle();
+            
+          if (emailError) {
+            console.error("Payment: Error in email lookup:", emailError);
+          } else if (emailData) {
+            // If the email lookup returns a different user_id than what's in the URL,
+            // use the one from the database as it's more reliable
+            console.log("Payment: Found user by email, using database user_id:", emailData.user_id);
+            setValidatedUserId(emailData.user_id);
+            return;
+          }
         }
+        
+        // If all validation methods fail
+        console.error("Payment: All user validation methods failed");
+        toast.error("User validation failed. Please try logging out and back in.");
+        navigate("/events");
+        
       } catch (error) {
         console.error("Payment: Failed to validate user ID:", error);
         toast.error("Failed to validate user information");
@@ -98,6 +147,7 @@ const PaymentScreen = () => {
     validateUserId();
   }, [user, urlUserId, navigate]);
   
+  // Fetch payment details for the event and sector
   useEffect(() => {
     const fetchPaymentDetails = async () => {
       console.log("Payment: Fetching payment details for event:", eventId, "sector:", sectorId);
@@ -471,6 +521,12 @@ const PaymentScreen = () => {
           {!transactionId && validatedUserId && (
             <p className="text-sm text-gray-500 text-center">
               Initializing payment...
+            </p>
+          )}
+          
+          {!validatedUserId && (
+            <p className="text-sm text-gray-500 text-center">
+              Validating user information...
             </p>
           )}
         </form>

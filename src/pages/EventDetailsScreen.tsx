@@ -36,8 +36,9 @@ const EventDetailsScreen = () => {
   const [selectedSector, setSelectedSector] = useState<SectorPrice | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [userLookupAttempts, setUserLookupAttempts] = useState(0);
   
-  // Improved user ID fetching with better error handling
+  // Enhanced user ID fetching with fallback email lookup
   useEffect(() => {
     const fetchUserId = async () => {
       if (!user) {
@@ -45,36 +46,109 @@ const EventDetailsScreen = () => {
         return;
       }
       
+      // Prevent too many retries
+      if (userLookupAttempts >= 3) {
+        console.log("EventDetails: Max lookup attempts reached");
+        toast.error("Unable to load user information. Please try refreshing the page.");
+        return;
+      }
+      
       try {
-        console.log("EventDetails: Fetching user ID for auth user:", user.id);
+        console.log("EventDetails: Starting user lookup - Attempt:", userLookupAttempts + 1);
+        console.log("EventDetails: Auth user details:", {
+          id: user.id,
+          email: user.email,
+          role: user.role
+        });
         
-        const { data, error } = await supabase
+        // First attempt: lookup by auth_uid
+        console.log("EventDetails: Attempting lookup by auth_uid:", user.id);
+        const { data: authUidData, error: authUidError } = await supabase
           .from("Users")
-          .select("user_id")
+          .select("user_id, auth_uid, email, username")
           .eq("auth_uid", user.id)
           .maybeSingle();
           
-        if (error) {
-          console.error("EventDetails: Error fetching user ID:", error);
-          toast.error("Error loading user information");
+        if (authUidError) {
+          console.error("EventDetails: Error in auth_uid lookup:", authUidError);
+        } else if (authUidData) {
+          console.log("EventDetails: User found by auth_uid:", authUidData);
+          setCurrentUserId(authUidData.user_id);
           return;
+        } else {
+          console.log("EventDetails: No user found by auth_uid, trying email fallback");
         }
         
-        if (data) {
-          console.log("EventDetails: User ID found:", data.user_id);
-          setCurrentUserId(data.user_id);
-        } else {
-          console.log("EventDetails: User not found in Users table for auth_uid:", user.id);
-          toast.error("User not found. Please try logging out and back in.");
+        // Fallback: lookup by email if auth_uid fails
+        if (user.email) {
+          console.log("EventDetails: Attempting lookup by email:", user.email);
+          const { data: emailData, error: emailError } = await supabase
+            .from("Users")
+            .select("user_id, auth_uid, email, username")
+            .eq("email", user.email)
+            .maybeSingle();
+            
+          if (emailError) {
+            console.error("EventDetails: Error in email lookup:", emailError);
+            throw emailError;
+          }
+          
+          if (emailData) {
+            console.log("EventDetails: User found by email:", emailData);
+            
+            // Update the auth_uid in the Users table to match current session
+            if (emailData.auth_uid !== user.id) {
+              console.log("EventDetails: Updating auth_uid mismatch");
+              const { error: updateError } = await supabase
+                .from("Users")
+                .update({ auth_uid: user.id })
+                .eq("user_id", emailData.user_id);
+                
+              if (updateError) {
+                console.error("EventDetails: Failed to update auth_uid:", updateError);
+              } else {
+                console.log("EventDetails: Successfully updated auth_uid");
+              }
+            }
+            
+            setCurrentUserId(emailData.user_id);
+            return;
+          } else {
+            console.log("EventDetails: No user found by email either");
+          }
         }
+        
+        // If we get here, user lookup failed completely
+        console.error("EventDetails: User lookup failed completely");
+        setUserLookupAttempts(prev => prev + 1);
+        
+        // Retry after a short delay for first 2 attempts
+        if (userLookupAttempts < 2) {
+          setTimeout(() => {
+            fetchUserId();
+          }, 1000);
+        } else {
+          toast.error("User not found in database. Please contact support.");
+        }
+        
       } catch (error) {
         console.error("EventDetails: Failed to fetch user ID:", error);
-        toast.error("Failed to load user information");
+        setUserLookupAttempts(prev => prev + 1);
+        
+        if (userLookupAttempts < 2) {
+          setTimeout(() => {
+            fetchUserId();
+          }, 1000);
+        } else {
+          toast.error("Failed to load user information");
+        }
       }
     };
     
-    fetchUserId();
-  }, [user]);
+    if (user && !currentUserId) {
+      fetchUserId();
+    }
+  }, [user, currentUserId, userLookupAttempts]);
   
   useEffect(() => {
     const fetchEventDetails = async () => {
@@ -179,7 +253,7 @@ const EventDetailsScreen = () => {
     
     if (!currentUserId) {
       console.log("EventDetails: Purchase failed - No user ID found");
-      toast.error("User information not loaded. Please try refreshing the page.");
+      toast.error("User information not loaded. Please refresh the page or contact support.");
       return;
     }
     
@@ -384,20 +458,21 @@ const EventDetailsScreen = () => {
           </div>
         )}
         
-        {/* Buy Ticket Button - Only show if user ID is loaded */}
-        {sectorPrices.length > 0 && selectedSector && currentUserId && (
-          <Button 
-            className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 mb-4"
-            onClick={handlePurchase}
-          >
-            Buy Ticket
-          </Button>
-        )}
-        
-        {/* Show loading message if user ID not yet loaded */}
-        {sectorPrices.length > 0 && selectedSector && !currentUserId && (
-          <div className="w-full bg-gray-100 p-3 rounded text-center text-gray-600 mb-4">
-            Loading user information...
+        {/* Buy Ticket Button - Enhanced status display */}
+        {sectorPrices.length > 0 && selectedSector && (
+          <div className="mb-4">
+            {currentUserId ? (
+              <Button 
+                className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90"
+                onClick={handlePurchase}
+              >
+                Buy Ticket
+              </Button>
+            ) : (
+              <div className="w-full bg-gray-100 p-3 rounded text-center text-gray-600">
+                {userLookupAttempts < 3 ? "Loading user information..." : "Unable to load user information"}
+              </div>
+            )}
           </div>
         )}
       </div>
