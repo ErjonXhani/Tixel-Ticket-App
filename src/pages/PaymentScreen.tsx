@@ -135,7 +135,7 @@ const PaymentScreen = () => {
         // If all validation methods fail
         console.error("Payment: All user validation methods failed");
         toast.error("User validation failed. Please try logging out and back in.");
-        navigate("/home");
+        navigate("/events");
         
       } catch (error) {
         console.error("Payment: Failed to validate user ID:", error);
