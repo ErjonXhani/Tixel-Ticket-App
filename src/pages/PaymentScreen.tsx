@@ -59,7 +59,7 @@ const PaymentScreen = () => {
       if (!urlUserId || urlUserId === 0) {
         console.error("Payment: Invalid user ID from URL:", urlUserId);
         toast.error("Invalid user information");
-        navigate("/events");
+        navigate("/home");
         return;
       }
       
