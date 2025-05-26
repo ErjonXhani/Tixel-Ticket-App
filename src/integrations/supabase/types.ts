@@ -126,43 +126,52 @@ export type Database = {
       }
       ResaleListings: {
         Row: {
+          created_at: string | null
           expires_at: string | null
-          listed_by: number | null
+          original_price: number | null
           resale_id: number
           resale_price: number | null
           resale_status: string | null
+          sold_at: string | null
           ticket_id: number | null
+          user_id: number | null
         }
         Insert: {
+          created_at?: string | null
           expires_at?: string | null
-          listed_by?: number | null
+          original_price?: number | null
           resale_id?: number
           resale_price?: number | null
           resale_status?: string | null
+          sold_at?: string | null
           ticket_id?: number | null
+          user_id?: number | null
         }
         Update: {
+          created_at?: string | null
           expires_at?: string | null
-          listed_by?: number | null
+          original_price?: number | null
           resale_id?: number
           resale_price?: number | null
           resale_status?: string | null
+          sold_at?: string | null
           ticket_id?: number | null
+          user_id?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "ResaleListings_listed_by_fkey"
-            columns: ["listed_by"]
-            isOneToOne: false
-            referencedRelation: "Users"
-            referencedColumns: ["user_id"]
-          },
           {
             foreignKeyName: "ResaleListings_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: true
             referencedRelation: "Tickets"
             referencedColumns: ["ticket_id"]
+          },
+          {
+            foreignKeyName: "ResaleListings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "Users"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -285,8 +294,12 @@ export type Database = {
       Transactions: {
         Row: {
           buyer_id: number | null
+          is_resale: boolean | null
           payment_method: string | null
           payment_status: string | null
+          platform_fee: number | null
+          resale_listing_id: number | null
+          seller_id: number | null
           ticket_id: number | null
           total_amount: number | null
           transaction_id: number
@@ -294,8 +307,12 @@ export type Database = {
         }
         Insert: {
           buyer_id?: number | null
+          is_resale?: boolean | null
           payment_method?: string | null
           payment_status?: string | null
+          platform_fee?: number | null
+          resale_listing_id?: number | null
+          seller_id?: number | null
           ticket_id?: number | null
           total_amount?: number | null
           transaction_id?: number
@@ -303,8 +320,12 @@ export type Database = {
         }
         Update: {
           buyer_id?: number | null
+          is_resale?: boolean | null
           payment_method?: string | null
           payment_status?: string | null
+          platform_fee?: number | null
+          resale_listing_id?: number | null
+          seller_id?: number | null
           ticket_id?: number | null
           total_amount?: number | null
           transaction_id?: number
@@ -314,6 +335,20 @@ export type Database = {
           {
             foreignKeyName: "Transactions_buyer_id_fkey"
             columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "Users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "Transactions_resale_listing_id_fkey"
+            columns: ["resale_listing_id"]
+            isOneToOne: false
+            referencedRelation: "ResaleListings"
+            referencedColumns: ["resale_id"]
+          },
+          {
+            foreignKeyName: "Transactions_seller_id_fkey"
+            columns: ["seller_id"]
             isOneToOne: false
             referencedRelation: "Users"
             referencedColumns: ["user_id"]
