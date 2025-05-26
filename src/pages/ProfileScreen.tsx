@@ -2,21 +2,10 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { Calendar, User, Ticket, MapPin, ChevronRight } from "lucide-react";
+import { User, ChevronRight } from "lucide-react";
 
 const ProfileScreen = () => {
   const { user, logout, isAdmin } = useAuth();
-
-  // Mock data
-  const upcomingEvents = [
-    {
-      id: 1,
-      title: "Summer Music Festival",
-      date: "Jun 15, 2023",
-      location: "Central Park, New York",
-      imageUrl: "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=200&auto=format&fit=crop",
-    },
-  ];
 
   return (
     <div className="pb-8">
@@ -62,53 +51,6 @@ const ProfileScreen = () => {
             Sign Out
           </Button>
         </div>
-      </div>
-      
-      {/* My Tickets */}
-      <div className="px-4 mb-6">
-        <h2 className="text-lg font-bold mb-3 flex items-center">
-          <Ticket className="w-5 h-5 mr-2" />
-          My Tickets
-        </h2>
-        
-        {upcomingEvents.length > 0 ? (
-          <div className="space-y-3">
-            {upcomingEvents.map((event) => (
-              <div key={event.id} className="bg-white rounded-lg shadow-sm border border-gray-100 p-3 flex">
-                <img
-                  src={event.imageUrl}
-                  alt={event.title}
-                  className="w-16 h-16 rounded-md object-cover"
-                />
-                
-                <div className="ml-3 flex-1">
-                  <h3 className="font-medium text-sm">{event.title}</h3>
-                  
-                  <div className="flex items-center text-gray-500 text-xs mt-1">
-                    <Calendar className="w-3 h-3 mr-1" />
-                    <span>{event.date}</span>
-                  </div>
-                  
-                  <div className="flex items-center text-gray-500 text-xs mt-1">
-                    <MapPin className="w-3 h-3 mr-1" />
-                    <span>{event.location}</span>
-                  </div>
-                </div>
-                
-                <Button variant="ghost" size="sm" className="text-primary">
-                  View
-                </Button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 bg-gray-50 rounded-lg">
-            <p className="text-gray-500">No tickets purchased yet</p>
-            <Button variant="link" className="text-primary mt-2">
-              Browse Events
-            </Button>
-          </div>
-        )}
       </div>
       
       {/* Settings */}
