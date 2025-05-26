@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -51,48 +52,53 @@ const MyTicketsScreen = () => {
 
         console.log("Found user_id:", userData.user_id);
 
-        // Single query with all JOINs to get tickets, events, venues, sectors, and transaction amounts
-        const { data: ticketsData, error: ticketsError } = await supabase
-          .from("Tickets")
+        // Get paid transactions for this user with complete ticket and event information
+        const { data: transactionsData, error: transactionsError } = await supabase
+          .from("Transactions")
           .select(`
+            total_amount,
             ticket_id,
-            event_id,
-            sector_id,
-            ticket_type,
-            status,
-            "Events"!inner(
-              title,
-              event_date,
-              "Venues"!inner(name)
-            ),
-            "Sectors"!inner(sector_name),
-            "Transactions"(total_amount)
+            "Tickets"!inner(
+              ticket_id,
+              event_id,
+              sector_id,
+              ticket_type,
+              status,
+              "Events"!inner(
+                title,
+                event_date,
+                "Venues"!inner(name)
+              ),
+              "Sectors"!inner(sector_name)
+            )
           `)
-          .eq("owner_id", userData.user_id)
-          .in("status", ["Reserved", "Owned"])
-          .eq("Transactions.buyer_id", userData.user_id)
-          .eq("Transactions.payment_status", "Paid");
+          .eq("buyer_id", userData.user_id)
+          .eq("payment_status", "Paid")
+          .not("ticket_id", "is", null);
 
-        if (ticketsError) {
-          console.error("Error fetching tickets:", ticketsError);
-          throw ticketsError;
+        if (transactionsError) {
+          console.error("Error fetching transactions:", transactionsError);
+          throw transactionsError;
         }
 
-        console.log("Tickets data with transactions:", ticketsData);
+        console.log("Transactions data:", transactionsData);
 
         // Transform the data to our interface
-        const transformedTickets: UserTicket[] = ticketsData?.map(ticket => ({
-          ticket_id: ticket.ticket_id,
-          event_id: ticket.event_id,
-          sector_id: ticket.sector_id,
-          ticket_type: ticket.ticket_type || "General",
-          status: ticket.status,
-          event_title: ticket.Events?.title || "Unknown Event",
-          event_date: ticket.Events?.event_date || "",
-          venue_name: ticket.Events?.Venues?.name || "Unknown Venue",
-          sector_name: ticket.Sectors?.sector_name || "Unknown Sector",
-          original_price: ticket.Transactions?.[0]?.total_amount || 0
-        })) || [];
+        const transformedTickets: UserTicket[] = transactionsData?.map(transaction => {
+          const ticket = transaction.Tickets;
+          return {
+            ticket_id: ticket.ticket_id,
+            event_id: ticket.event_id,
+            sector_id: ticket.sector_id,
+            ticket_type: ticket.ticket_type || "General",
+            status: ticket.status,
+            event_title: ticket.Events?.title || "Unknown Event",
+            event_date: ticket.Events?.event_date || "",
+            venue_name: ticket.Events?.Venues?.name || "Unknown Venue",
+            sector_name: ticket.Sectors?.sector_name || "Unknown Sector",
+            original_price: transaction.total_amount || 0
+          };
+        }) || [];
 
         console.log("Transformed tickets:", transformedTickets);
         setTickets(transformedTickets);
