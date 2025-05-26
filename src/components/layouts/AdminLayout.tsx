@@ -1,4 +1,3 @@
-
 import { Outlet, NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
@@ -45,11 +44,10 @@ const AdminLayout = () => {
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center">
             <img 
-              src="/lovable-uploads/424dc4da-05e6-4b1b-8102-ea8d3348e10c.png" 
+              src="/lovable-uploads/1cb080ac-615b-4ec8-b3b7-e994e305322b.png" 
               alt="TXL Logo" 
-              className="h-8 w-8 object-contain mr-2"
+              className="h-10 w-auto object-contain"
             />
-            <span className="text-xl font-bold text-white">Admin</span>
           </div>
           <Button
             variant="ghost"
@@ -109,11 +107,10 @@ const AdminLayout = () => {
           </Button>
           <div className="flex items-center">
             <img 
-              src="/lovable-uploads/424dc4da-05e6-4b1b-8102-ea8d3348e10c.png" 
+              src="/lovable-uploads/1cb080ac-615b-4ec8-b3b7-e994e305322b.png" 
               alt="TXL Logo" 
-              className="h-6 w-6 object-contain mr-2"
+              className="h-8 w-auto object-contain"
             />
-            <span className="text-lg font-semibold text-[#ff4b00]">Admin</span>
           </div>
           <div className="w-10" /> {/* Spacer */}
         </header>
