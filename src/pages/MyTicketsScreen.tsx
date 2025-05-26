@@ -25,139 +25,236 @@ const MyTicketsScreen = () => {
   const navigate = useNavigate();
   const [userTickets, setUserTickets] = useState<UserTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [hasValidated, setHasValidated] = useState(false);
+  const [validationAttempts, setValidationAttempts] = useState(0);
 
-  // Check authentication first
+  // Single consolidated useEffect that handles the entire flow
   useEffect(() => {
-    console.log("Auth state - user:", user);
-    if (!user) {
-      console.log("No user found, setting loading to false");
-      setIsLoading(false);
-      setAuthError("Please log in to view your tickets");
-      return;
-    }
-    setAuthError(null);
-  }, [user]);
+    const loadTicketsWithValidation = async () => {
+      console.log("MyTickets: Starting ticket load process");
 
-  // Fetch current user ID
-  useEffect(() => {
-    const fetchUserId = async () => {
+      // Check authentication first
       if (!user) {
-        console.log("No user available for ID fetch");
+        console.log("MyTickets: No user found");
+        setIsLoading(false);
+        setAuthError("Please log in to view your tickets");
         return;
       }
 
-      try {
-        console.log("Fetching user ID for auth_uid:", user.id);
-        const { data: userData, error } = await supabase
-          .from("Users")
-          .select("user_id")
-          .eq("auth_uid", user.id)
-          .maybeSingle();
-
-        if (error) {
-          console.error("Error fetching user ID:", error);
-          throw error;
-        }
-        
-        if (userData) {
-          console.log("Found user ID:", userData.user_id);
-          setCurrentUserId(userData.user_id);
-        } else {
-          console.log("No user record found in Users table");
-          toast.error("User profile not found. Please contact support.");
-        }
-      } catch (error) {
-        console.error("Error fetching user ID:", error);
-        toast.error("Failed to load user information");
-        setAuthError("Failed to load user profile");
-      }
-    };
-
-    if (user) {
-      fetchUserId();
-    }
-  }, [user]);
-
-  // Fetch user's owned tickets
-  useEffect(() => {
-    const fetchUserTickets = async () => {
-      if (!currentUserId) {
-        console.log("No currentUserId available for ticket fetch");
+      // Prevent multiple simultaneous attempts
+      if (hasValidated || validationAttempts >= 3) {
+        console.log("MyTickets: Skipping - already validated or max attempts reached");
         return;
       }
 
-      setIsLoading(true);
+      console.log("MyTickets: Starting validation attempt", validationAttempts + 1);
+      setValidationAttempts(prev => prev + 1);
+      setAuthError(null);
+
       try {
-        console.log("Fetching tickets for user ID:", currentUserId);
-        const { data: tickets, error } = await supabase
-          .from("Tickets")
-          .select(`
-            ticket_id,
-            event_id,
-            sector_id,
-            ticket_type,
-            status,
-            Events(title, event_date, venue_id, Venues(name)),
-            Sectors(sector_name)
-          `)
-          .eq("owner_id", currentUserId)
-          .in("status", ["Reserved", "Owned"]);
-
-        if (error) {
-          console.error("Error fetching tickets:", error);
-          throw error;
-        }
-
-        console.log("Fetched tickets:", tickets);
-
-        // Transform the data
-        const transformedTickets = tickets?.map(ticket => ({
-          ticket_id: ticket.ticket_id,
-          event_id: ticket.event_id,
-          sector_id: ticket.sector_id,
-          ticket_type: ticket.ticket_type,
-          status: ticket.status,
-          event_title: ticket.Events?.title || "Unknown Event",
-          event_date: ticket.Events?.event_date || "",
-          venue_name: ticket.Events?.Venues?.name || "Unknown Venue",
-          sector_name: ticket.Sectors?.sector_name || "Unknown Sector"
-        })) || [];
-
-        console.log("Transformed tickets:", transformedTickets);
-
-        // Fetch original prices for tickets
-        const ticketsWithPrices = await Promise.all(
-          transformedTickets.map(async (ticket) => {
-            const { data: pricingData } = await supabase
-              .from("EventSectorPricing")
-              .select("price")
-              .eq("event_id", ticket.event_id)
-              .eq("sector_id", ticket.sector_id)
-              .maybeSingle();
-
-            return {
-              ...ticket,
-              original_price: pricingData?.price || 0
-            };
-          })
+        // Add timeout wrapper for all database queries
+        const queryTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Query timeout')), 5000)
         );
 
-        console.log("Tickets with prices:", ticketsWithPrices);
-        setUserTickets(ticketsWithPrices);
+        let validatedUserId: number | null = null;
+
+        // Strategy 1: Direct auth_uid + user.id match
+        try {
+          const directQuery = supabase
+            .from("Users")
+            .select("user_id, auth_uid, email")
+            .eq("auth_uid", user.id)
+            .maybeSingle();
+
+          const { data: directData, error: directError } = await Promise.race([
+            directQuery,
+            queryTimeout
+          ]) as any;
+
+          if (directError && !directError.message?.includes('timeout')) {
+            console.error("MyTickets: Direct validation error:", directError);
+          } else if (directData) {
+            console.log("MyTickets: Direct match found:", directData.user_id);
+            validatedUserId = directData.user_id;
+          }
+        } catch (error) {
+          console.log("MyTickets: Direct validation failed:", error);
+        }
+
+        // Strategy 2: Email match fallback
+        if (!validatedUserId && user.email) {
+          try {
+            const emailQuery = supabase
+              .from("Users")
+              .select("user_id, auth_uid, email")
+              .eq("email", user.email)
+              .maybeSingle();
+
+            const { data: emailData, error: emailError } = await Promise.race([
+              emailQuery,
+              queryTimeout
+            ]) as any;
+
+            if (emailError && !emailError.message?.includes('timeout')) {
+              console.error("MyTickets: Email validation error:", emailError);
+            } else if (emailData) {
+              console.log("MyTickets: Email match found:", emailData.user_id);
+              validatedUserId = emailData.user_id;
+              
+              // Update auth_uid if needed
+              if (emailData.auth_uid !== user.id) {
+                console.log("MyTickets: Updating mismatched auth_uid");
+                try {
+                  await supabase
+                    .from("Users")
+                    .update({ auth_uid: user.id })
+                    .eq("user_id", emailData.user_id);
+                } catch (updateErr) {
+                  console.error("MyTickets: Failed to update auth_uid:", updateErr);
+                }
+              }
+            }
+          } catch (error) {
+            console.log("MyTickets: Email validation failed:", error);
+          }
+        }
+
+        // If validation successful, fetch tickets
+        if (validatedUserId) {
+          console.log("MyTickets: User validated, fetching tickets for user ID:", validatedUserId);
+          setHasValidated(true);
+          
+          try {
+            // Fetch tickets with all related data in a single query
+            const ticketsQuery = supabase
+              .from("Tickets")
+              .select(`
+                ticket_id,
+                event_id,
+                sector_id,
+                ticket_type,
+                status,
+                Events(
+                  title, 
+                  event_date, 
+                  venue_id, 
+                  Venues(name)
+                ),
+                Sectors(sector_name)
+              `)
+              .eq("owner_id", validatedUserId)
+              .in("status", ["Reserved", "Owned"]);
+
+            const { data: tickets, error: ticketsError } = await Promise.race([
+              ticketsQuery,
+              queryTimeout
+            ]) as any;
+
+            if (ticketsError) {
+              console.error("MyTickets: Error fetching tickets:", ticketsError);
+              throw ticketsError;
+            }
+
+            console.log("MyTickets: Fetched tickets:", tickets);
+
+            // Transform the data
+            const transformedTickets = tickets?.map(ticket => ({
+              ticket_id: ticket.ticket_id,
+              event_id: ticket.event_id,
+              sector_id: ticket.sector_id,
+              ticket_type: ticket.ticket_type,
+              status: ticket.status,
+              event_title: ticket.Events?.title || "Unknown Event",
+              event_date: ticket.Events?.event_date || "",
+              venue_name: ticket.Events?.Venues?.name || "Unknown Venue",
+              sector_name: ticket.Sectors?.sector_name || "Unknown Sector"
+            })) || [];
+
+            // Fetch prices in a single batch query
+            if (transformedTickets.length > 0) {
+              const eventSectorPairs = transformedTickets.map(ticket => 
+                `(event_id.eq.${ticket.event_id},sector_id.eq.${ticket.sector_id})`
+              ).join(',');
+              
+              try {
+                const { data: pricingData } = await supabase
+                  .from("EventSectorPricing")
+                  .select("event_id, sector_id, price")
+                  .or(eventSectorPairs);
+
+                // Map prices to tickets
+                const ticketsWithPrices = transformedTickets.map(ticket => {
+                  const pricing = pricingData?.find(p => 
+                    p.event_id === ticket.event_id && p.sector_id === ticket.sector_id
+                  );
+                  return {
+                    ...ticket,
+                    original_price: pricing?.price || 0
+                  };
+                });
+
+                console.log("MyTickets: Tickets with prices loaded successfully");
+                setUserTickets(ticketsWithPrices);
+              } catch (pricingError) {
+                console.error("MyTickets: Error fetching pricing:", pricingError);
+                // Still show tickets without prices
+                setUserTickets(transformedTickets.map(t => ({ ...t, original_price: 0 })));
+              }
+            } else {
+              setUserTickets([]);
+            }
+
+          } catch (ticketsError) {
+            console.error("MyTickets: Error in ticket fetching:", ticketsError);
+            toast.error("Failed to load your tickets");
+          }
+        } else {
+          // Validation failed
+          if (validationAttempts >= 2) {
+            console.error("MyTickets: All validation methods failed after 3 attempts");
+            setAuthError("Unable to verify your account. Please try refreshing the page.");
+          } else {
+            console.log("MyTickets: Retrying validation in 2 seconds...");
+            setTimeout(() => {
+              loadTicketsWithValidation();
+            }, 2000);
+            return; // Don't set loading to false yet
+          }
+        }
+
       } catch (error) {
-        console.error("Error fetching tickets:", error);
-        toast.error("Failed to load your tickets");
+        console.error("MyTickets: Unhandled error in loadTicketsWithValidation:", error);
+        if (validationAttempts >= 2) {
+          setAuthError("Something went wrong loading your tickets. Please refresh the page.");
+        } else {
+          setTimeout(() => {
+            loadTicketsWithValidation();
+          }, 2000);
+          return; // Don't set loading to false yet
+        }
       } finally {
-        setIsLoading(false);
+        // Only set loading to false if we're done (successful or final attempt)
+        if (hasValidated || validationAttempts >= 2) {
+          setIsLoading(false);
+        }
       }
     };
 
-    if (currentUserId) {
-      fetchUserTickets();
+    // Only run if we have a user and haven't validated yet
+    if (user && !hasValidated && validationAttempts < 3) {
+      loadTicketsWithValidation();
+    } else if (!user) {
+      setIsLoading(false);
+      setAuthError("Please log in to view your tickets");
     }
-  }, [currentUserId]);
+
+    // Cleanup function to prevent memory leaks
+    return () => {
+      // Any cleanup needed
+    };
+  }, [user, hasValidated, validationAttempts]); // Controlled dependencies
 
   const formatEventDate = (dateString: string) => {
     if (!dateString) return "TBD";
@@ -210,6 +307,11 @@ const MyTicketsScreen = () => {
     return (
       <div className="h-screen flex items-center justify-center">
         <div className="w-12 h-12 border-4 border-[#ff4b00] rounded-full border-t-transparent animate-spin"></div>
+        <div className="ml-4 text-gray-600">
+          {validationAttempts > 0 && (
+            <p className="text-sm">Validating user... (Attempt {validationAttempts}/3)</p>
+          )}
+        </div>
       </div>
     );
   }
