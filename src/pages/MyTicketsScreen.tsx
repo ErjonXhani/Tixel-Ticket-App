@@ -29,16 +29,15 @@ const MyTicketsScreen = () => {
 
   useEffect(() => {
     const fetchUserTickets = async () => {
-      // If no user, set loading to false and return
       if (!user) {
         setLoading(false);
         return;
       }
 
       try {
-        console.log("MyTickets: Fetching tickets for user:", user.id);
+        console.log("Fetching tickets for user:", user.id);
         
-        // Get user_id from Users table using auth_uid
+        // First get the user_id from the Users table
         const { data: userData, error: userError } = await supabase
           .from("Users")
           .select("user_id")
@@ -46,14 +45,14 @@ const MyTicketsScreen = () => {
           .single();
 
         if (userError || !userData) {
-          console.error("MyTickets: User not found in database:", userError);
+          console.error("User not found:", userError);
           setError("User account not found. Please contact support.");
           return;
         }
 
-        console.log("MyTickets: Found user_id:", userData.user_id);
+        console.log("Found user_id:", userData.user_id);
 
-        // Fetch tickets with all related data in a single query
+        // Get tickets for this user with all related information
         const { data: ticketsData, error: ticketsError } = await supabase
           .from("Tickets")
           .select(`
@@ -67,38 +66,55 @@ const MyTicketsScreen = () => {
               event_date,
               Venues!inner(name)
             ),
-            Sectors!inner(sector_name),
-            EventSectorPricing!inner(price)
+            Sectors!inner(sector_name)
           `)
           .eq("owner_id", userData.user_id)
           .in("status", ["Reserved", "Owned"]);
 
         if (ticketsError) {
-          console.error("MyTickets: Error fetching tickets:", ticketsError);
+          console.error("Error fetching tickets:", ticketsError);
           throw ticketsError;
         }
 
-        console.log("MyTickets: Raw tickets data:", ticketsData);
+        console.log("Tickets data:", ticketsData);
 
-        // Transform the data to our interface
-        const transformedTickets: UserTicket[] = ticketsData?.map(ticket => ({
-          ticket_id: ticket.ticket_id,
-          event_id: ticket.event_id,
-          sector_id: ticket.sector_id,
-          ticket_type: ticket.ticket_type || "General",
-          status: ticket.status,
-          event_title: ticket.Events?.title || "Unknown Event",
-          event_date: ticket.Events?.event_date || "",
-          venue_name: ticket.Events?.Venues?.name || "Unknown Venue",
-          sector_name: ticket.Sectors?.sector_name || "Unknown Sector",
-          original_price: ticket.EventSectorPricing?.price || 0
-        })) || [];
+        // Now get pricing for each ticket by matching event_id and sector_id
+        const transformedTickets: UserTicket[] = [];
+        
+        if (ticketsData && ticketsData.length > 0) {
+          for (const ticket of ticketsData) {
+            // Get price for this specific event and sector combination
+            const { data: pricingData, error: pricingError } = await supabase
+              .from("EventSectorPricing")
+              .select("price")
+              .eq("event_id", ticket.event_id)
+              .eq("sector_id", ticket.sector_id)
+              .single();
 
-        console.log("MyTickets: Transformed tickets:", transformedTickets);
+            if (pricingError) {
+              console.warn(`No pricing found for event ${ticket.event_id}, sector ${ticket.sector_id}`);
+            }
+
+            transformedTickets.push({
+              ticket_id: ticket.ticket_id,
+              event_id: ticket.event_id,
+              sector_id: ticket.sector_id,
+              ticket_type: ticket.ticket_type || "General",
+              status: ticket.status,
+              event_title: ticket.Events?.title || "Unknown Event",
+              event_date: ticket.Events?.event_date || "",
+              venue_name: ticket.Events?.Venues?.name || "Unknown Venue",
+              sector_name: ticket.Sectors?.sector_name || "Unknown Sector",
+              original_price: pricingData?.price || 0
+            });
+          }
+        }
+
+        console.log("Transformed tickets:", transformedTickets);
         setTickets(transformedTickets);
 
       } catch (err: any) {
-        console.error("MyTickets: Error loading tickets:", err);
+        console.error("Error loading tickets:", err);
         setError("Failed to load your tickets. Please try again.");
         toast.error("Failed to load your tickets");
       } finally {
