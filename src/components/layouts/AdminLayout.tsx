@@ -43,7 +43,14 @@ const AdminLayout = () => {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-xl md:text-2xl font-bold text-[#ff4b00]">Tixel Admin</h1>
+          <div className="flex items-center">
+            <img 
+              src="/lovable-uploads/424dc4da-05e6-4b1b-8102-ea8d3348e10c.png" 
+              alt="TXL Logo" 
+              className="h-8 w-8 object-contain mr-2"
+            />
+            <span className="text-xl font-bold text-white">Admin</span>
+          </div>
           <Button
             variant="ghost"
             size="sm"
@@ -100,7 +107,14 @@ const AdminLayout = () => {
           >
             <Menu className="w-5 h-5" />
           </Button>
-          <h1 className="text-lg font-semibold text-[#ff4b00]">Tixel Admin</h1>
+          <div className="flex items-center">
+            <img 
+              src="/lovable-uploads/424dc4da-05e6-4b1b-8102-ea8d3348e10c.png" 
+              alt="TXL Logo" 
+              className="h-6 w-6 object-contain mr-2"
+            />
+            <span className="text-lg font-semibold text-[#ff4b00]">Admin</span>
+          </div>
           <div className="w-10" /> {/* Spacer */}
         </header>
         

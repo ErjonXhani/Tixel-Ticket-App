@@ -2,14 +2,33 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, Building, Settings, Plus, Users } from "lucide-react";
+import { Calendar, MapPin, Building, Settings, Plus, Users, DollarSign } from "lucide-react";
+import { useAdminStats } from "@/hooks/useAdminStats";
 
 const AdminDashboard = () => {
-  const stats = [
-    { title: "Total Events", value: "12", icon: Calendar },
-    { title: "Total Venues", value: "8", icon: Building },
-    { title: "Total Users", value: "245", icon: Users },
-    { title: "Active Sectors", value: "32", icon: Settings },
+  const { data: stats, isLoading, error } = useAdminStats();
+
+  const statsConfig = [
+    { 
+      title: "Total Events", 
+      value: isLoading ? "..." : (stats?.totalEvents || 0).toString(), 
+      icon: Calendar 
+    },
+    { 
+      title: "Total Venues", 
+      value: isLoading ? "..." : (stats?.totalVenues || 0).toString(), 
+      icon: Building 
+    },
+    { 
+      title: "Total Users", 
+      value: isLoading ? "..." : (stats?.totalUsers || 0).toString(), 
+      icon: Users 
+    },
+    { 
+      title: "Total Revenue", 
+      value: isLoading ? "..." : `$${(stats?.totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 
+      icon: DollarSign 
+    },
   ];
 
   const quickActions = [
@@ -19,13 +38,23 @@ const AdminDashboard = () => {
     { title: "Event Pricing", path: "/admin/pricing", icon: MapPin, color: "bg-orange-500" },
   ];
 
+  if (error) {
+    console.error('Error fetching admin stats:', error);
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <h1 className="text-2xl font-bold mb-6">Admin Dashboard</h1>
       
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+          Failed to load dashboard statistics. Please try refreshing the page.
+        </div>
+      )}
+      
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-        {stats.map((stat, index) => (
+        {statsConfig.map((stat, index) => (
           <div key={index} className="bg-white p-4 md:p-6 rounded-lg shadow">
             <div className="flex items-center">
               <stat.icon className="w-6 h-6 md:w-8 md:h-8 text-[#ff4b00] mr-2 md:mr-3" />
