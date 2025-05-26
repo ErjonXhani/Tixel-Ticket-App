@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,7 +82,7 @@ const ResellScreen = () => {
             Sectors(sector_name)
           `)
           .eq("owner_id", currentUserId)
-          .eq("status", "Owned");
+          .eq("status", "Reserved");
 
         if (error) throw error;
 
@@ -191,7 +190,7 @@ const ResellScreen = () => {
           Sectors(sector_name)
         `)
         .eq("owner_id", currentUserId)
-        .eq("status", "Owned");
+        .eq("status", "Reserved");
 
       if (tickets) {
         const transformedTickets = tickets.map(ticket => ({
