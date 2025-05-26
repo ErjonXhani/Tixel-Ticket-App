@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
+  const isMobile = useIsMobile();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,11 +32,11 @@ const LoginScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white p-6 flex flex-col">
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="w-full max-w-sm">
+    <div className={`min-h-screen bg-white flex flex-col ${isMobile ? 'p-6' : 'items-center justify-center'}`}>
+      <div className={`${isMobile ? 'flex-1 flex flex-col items-center justify-center' : ''}`}>
+        <div className={`w-full ${isMobile ? 'max-w-sm' : 'max-w-md'}`}>
           <div className="text-center mb-8">
-            {/* Updated Logo - just the X */}
+            {/* Logo */}
             <div className="flex justify-center mb-8">
               <img 
                 src="/lovable-uploads/4f84f21f-d678-4b27-bf99-b3fed96e6d6b.png" 
@@ -117,17 +119,19 @@ const LoginScreen = () => {
       </div>
       
       {/* Admin login shortcut (for demo) */}
-      <div className="mt-8 text-center text-xs text-gray-400">
-        <button 
-          onClick={() => {
-            setEmail("admin@tixel.com");
-            setPassword("admin123");
-          }}
-          className="hover:underline"
-        >
-          Demo: Use Admin Credentials
-        </button>
-      </div>
+      {isMobile && (
+        <div className="mt-8 text-center text-xs text-gray-400">
+          <button 
+            onClick={() => {
+              setEmail("admin@tixel.com");
+              setPassword("admin123");
+            }}
+            className="hover:underline"
+          >
+            Demo: Use Admin Credentials
+          </button>
+        </div>
+      )}
     </div>
   );
 };

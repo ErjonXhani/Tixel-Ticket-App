@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Calendar, MapPin } from "lucide-react";
@@ -175,22 +174,18 @@ const HomeScreen = () => {
 
   return (
     <div className="pb-6">
-      {/* Updated logo header */}
-      <div className="py-4 flex justify-end pr-4">
-        <img 
-          src="/lovable-uploads/4f84f21f-d678-4b27-bf99-b3fed96e6d6b.png" 
-          alt="TXL Logo" 
-          className="h-10"
-        />
-      </div>
-      
-      {/* Welcome section */}
-      <header className="pt-2 px-4">
-        <div className="flex justify-between items-center mb-6">
+      {/* Welcome section with logo */}
+      <header className="pt-6 px-4">
+        <div className="flex justify-between items-start mb-6">
           <div>
             <p className="text-gray-600">Welcome back,</p>
             <h1 className="text-xl font-bold">{user?.name || "Guest"}</h1>
           </div>
+          <img 
+            src="/lovable-uploads/4f84f21f-d678-4b27-bf99-b3fed96e6d6b.png" 
+            alt="TXL Logo" 
+            className="h-10"
+          />
         </div>
         
         {/* Search bar */}

@@ -40,10 +40,10 @@ const SignupScreen = () => {
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            {/* New Logo */}
+            {/* Updated Logo */}
             <div className="flex justify-center mb-8">
               <img 
-                src="/lovable-uploads/d6231a8e-4d69-4754-bcd4-3b9fee09db16.png" 
+                src="/lovable-uploads/4f84f21f-d678-4b27-bf99-b3fed96e6d6b.png" 
                 alt="Tixel Logo" 
                 className="h-16"
               />
