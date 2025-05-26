@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -121,13 +120,13 @@ const MyTicketsScreen = () => {
           }
         }
 
-        // If validation successful, fetch tickets
+        // If validation successful, fetch tickets with prices in a single query
         if (validatedUserId) {
           console.log("MyTickets: User validated, fetching tickets for user ID:", validatedUserId);
           setHasValidated(true);
           
           try {
-            // Fetch tickets with all related data in a single query
+            // Fetch tickets with all related data including pricing in a single query
             const ticketsQuery = supabase
               .from("Tickets")
               .select(`
@@ -136,13 +135,14 @@ const MyTicketsScreen = () => {
                 sector_id,
                 ticket_type,
                 status,
-                Events(
+                Events!inner(
                   title, 
                   event_date, 
                   venue_id, 
                   Venues(name)
                 ),
-                Sectors(sector_name)
+                Sectors!inner(sector_name),
+                EventSectorPricing!inner(price)
               `)
               .eq("owner_id", validatedUserId)
               .in("status", ["Reserved", "Owned"]);
@@ -157,7 +157,7 @@ const MyTicketsScreen = () => {
               throw ticketsError;
             }
 
-            console.log("MyTickets: Fetched tickets:", tickets);
+            console.log("MyTickets: Fetched tickets with pricing:", tickets);
 
             // Transform the data
             const transformedTickets = tickets?.map(ticket => ({
@@ -169,42 +169,12 @@ const MyTicketsScreen = () => {
               event_title: ticket.Events?.title || "Unknown Event",
               event_date: ticket.Events?.event_date || "",
               venue_name: ticket.Events?.Venues?.name || "Unknown Venue",
-              sector_name: ticket.Sectors?.sector_name || "Unknown Sector"
+              sector_name: ticket.Sectors?.sector_name || "Unknown Sector",
+              original_price: ticket.EventSectorPricing?.price || 0
             })) || [];
 
-            // Fetch prices in a single batch query
-            if (transformedTickets.length > 0) {
-              const eventSectorPairs = transformedTickets.map(ticket => 
-                `(event_id.eq.${ticket.event_id},sector_id.eq.${ticket.sector_id})`
-              ).join(',');
-              
-              try {
-                const { data: pricingData } = await supabase
-                  .from("EventSectorPricing")
-                  .select("event_id, sector_id, price")
-                  .or(eventSectorPairs);
-
-                // Map prices to tickets
-                const ticketsWithPrices = transformedTickets.map(ticket => {
-                  const pricing = pricingData?.find(p => 
-                    p.event_id === ticket.event_id && p.sector_id === ticket.sector_id
-                  );
-                  return {
-                    ...ticket,
-                    original_price: pricing?.price || 0
-                  };
-                });
-
-                console.log("MyTickets: Tickets with prices loaded successfully");
-                setUserTickets(ticketsWithPrices);
-              } catch (pricingError) {
-                console.error("MyTickets: Error fetching pricing:", pricingError);
-                // Still show tickets without prices
-                setUserTickets(transformedTickets.map(t => ({ ...t, original_price: 0 })));
-              }
-            } else {
-              setUserTickets([]);
-            }
+            console.log("MyTickets: Transformed tickets with prices:", transformedTickets);
+            setUserTickets(transformedTickets);
 
           } catch (ticketsError) {
             console.error("MyTickets: Error in ticket fetching:", ticketsError);
@@ -345,7 +315,7 @@ const MyTicketsScreen = () => {
                 <h3 className="font-semibold text-lg text-gray-900">{ticket.event_title}</h3>
                 <div className="text-right">
                   <span className="text-lg font-bold text-[#ff4b00]">
-                    ${ticket.original_price?.toFixed(2)}
+                    ${ticket.original_price?.toFixed(2) || "0.00"}
                   </span>
                   <div className={`inline-block px-2 py-1 rounded-full text-xs font-medium ml-2 ${getStatusColor(ticket.status)}`}>
                     {ticket.status}
