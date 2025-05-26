@@ -1,6 +1,6 @@
 
 import { Outlet, NavLink, useLocation } from "react-router-dom";
-import { Home, Calendar, ArrowRight, User } from "lucide-react";
+import { Home, Calendar, Ticket, User } from "lucide-react";
 import { useEffect } from "react";
 
 const MobileLayout = () => {
@@ -41,13 +41,13 @@ const MobileLayout = () => {
         </NavLink>
         
         <NavLink 
-          to="/resell" 
+          to="/my-tickets" 
           className={({isActive}) => 
             `flex flex-col items-center justify-center p-2 ${isActive ? "text-[#ff4b00]" : "text-gray-600"}`
           }
         >
-          <ArrowRight className="w-5 h-5 mb-1" />
-          <span className="text-xs">Resell</span>
+          <Ticket className="w-5 h-5 mb-1" />
+          <span className="text-xs">My Tickets</span>
         </NavLink>
         
         <NavLink 
