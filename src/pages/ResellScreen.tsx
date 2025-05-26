@@ -1,10 +1,12 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Ticket, Calendar, MapPin, User, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Ticket, Calendar, MapPin, User, Loader2, LogIn } from "lucide-react";
 
 interface UserTicket {
   ticket_id: number;
@@ -27,6 +29,7 @@ interface ResaleFormData {
 
 const ResellScreen = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [userTickets, setUserTickets] = useState<UserTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,39 +40,71 @@ const ResellScreen = () => {
     description: ""
   });
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Check authentication first
+  useEffect(() => {
+    console.log("Auth state - user:", user);
+    if (!user) {
+      console.log("No user found, setting loading to false");
+      setIsLoading(false);
+      setAuthError("Please log in to view and manage your tickets");
+      return;
+    }
+    setAuthError(null);
+  }, [user]);
 
   // Fetch current user ID
   useEffect(() => {
     const fetchUserId = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log("No user available for ID fetch");
+        return;
+      }
 
       try {
+        console.log("Fetching user ID for auth_uid:", user.id);
         const { data: userData, error } = await supabase
           .from("Users")
           .select("user_id")
           .eq("auth_uid", user.id)
           .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching user ID:", error);
+          throw error;
+        }
+        
         if (userData) {
+          console.log("Found user ID:", userData.user_id);
           setCurrentUserId(userData.user_id);
+        } else {
+          console.log("No user record found in Users table");
+          toast.error("User profile not found. Please contact support.");
         }
       } catch (error) {
         console.error("Error fetching user ID:", error);
         toast.error("Failed to load user information");
+        setAuthError("Failed to load user profile");
       }
     };
 
-    fetchUserId();
+    if (user) {
+      fetchUserId();
+    }
   }, [user]);
 
   // Fetch user's owned tickets
   useEffect(() => {
     const fetchUserTickets = async () => {
-      if (!currentUserId) return;
+      if (!currentUserId) {
+        console.log("No currentUserId available for ticket fetch");
+        return;
+      }
 
       setIsLoading(true);
       try {
+        console.log("Fetching tickets for user ID:", currentUserId);
         const { data: tickets, error } = await supabase
           .from("Tickets")
           .select(`
@@ -84,7 +119,12 @@ const ResellScreen = () => {
           .eq("owner_id", currentUserId)
           .eq("status", "Reserved");
 
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching tickets:", error);
+          throw error;
+        }
+
+        console.log("Fetched tickets:", tickets);
 
         // Transform the data
         const transformedTickets = tickets?.map(ticket => ({
@@ -98,6 +138,8 @@ const ResellScreen = () => {
           venue_name: ticket.Events?.Venues?.name || "Unknown Venue",
           sector_name: ticket.Sectors?.sector_name || "Unknown Sector"
         })) || [];
+
+        console.log("Transformed tickets:", transformedTickets);
 
         // Fetch original prices for tickets
         const ticketsWithPrices = await Promise.all(
@@ -116,6 +158,7 @@ const ResellScreen = () => {
           })
         );
 
+        console.log("Tickets with prices:", ticketsWithPrices);
         setUserTickets(ticketsWithPrices);
       } catch (error) {
         console.error("Error fetching tickets:", error);
@@ -142,8 +185,20 @@ const ResellScreen = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log("Starting resale submission...");
+    console.log("Selected ticket:", selectedTicket);
+    console.log("Current user ID:", currentUserId);
+    console.log("Form data:", formData);
+    
+    if (!user) {
+      toast.error("Please log in to list tickets for resale");
+      navigate("/login");
+      return;
+    }
+
     if (!selectedTicket || !currentUserId) {
       toast.error("Please select a ticket to resell");
+      console.error("Missing data - selectedTicket:", selectedTicket, "currentUserId:", currentUserId);
       return;
     }
 
@@ -152,21 +207,42 @@ const ResellScreen = () => {
       return;
     }
 
+    // Validate price doesn't exceed face value
+    const resalePrice = parseFloat(formData.resale_price);
+    if (selectedTicket.original_price && resalePrice > selectedTicket.original_price) {
+      toast.error(`Price cannot exceed face value of $${selectedTicket.original_price.toFixed(2)}`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      console.log("Creating resale listing with data:", {
+        ticket_id: formData.ticket_id,
+        user_id: currentUserId,
+        resale_price: resalePrice,
+        original_price: selectedTicket.original_price,
+        resale_status: "Active"
+      });
+
       // Create resale listing
-      const { error } = await supabase
+      const { data: resaleData, error } = await supabase
         .from("ResaleListings")
         .insert({
           ticket_id: formData.ticket_id,
           user_id: currentUserId,
-          resale_price: parseFloat(formData.resale_price),
+          resale_price: resalePrice,
           original_price: selectedTicket.original_price,
           resale_status: "Active"
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error creating resale listing:", error);
+        throw error;
+      }
 
+      console.log("Resale listing created successfully:", resaleData);
       toast.success("Ticket listed for resale successfully!");
       
       // Reset form and refresh tickets
@@ -204,7 +280,25 @@ const ResellScreen = () => {
           venue_name: ticket.Events?.Venues?.name || "Unknown Venue",
           sector_name: ticket.Sectors?.sector_name || "Unknown Sector"
         }));
-        setUserTickets(transformedTickets);
+        
+        // Fetch prices for refreshed tickets
+        const ticketsWithPrices = await Promise.all(
+          transformedTickets.map(async (ticket) => {
+            const { data: pricingData } = await supabase
+              .from("EventSectorPricing")
+              .select("price")
+              .eq("event_id", ticket.event_id)
+              .eq("sector_id", ticket.sector_id)
+              .maybeSingle();
+
+            return {
+              ...ticket,
+              original_price: pricingData?.price || 0
+            };
+          })
+        );
+        
+        setUserTickets(ticketsWithPrices);
       }
 
     } catch (error: any) {
@@ -228,6 +322,28 @@ const ResellScreen = () => {
       return "TBD";
     }
   };
+
+  // Show login prompt if not authenticated
+  if (!user || authError) {
+    return (
+      <div className="p-6 pb-20">
+        <h1 className="text-2xl font-bold mb-6">Resell Your Tickets</h1>
+        <div className="bg-gray-50 rounded-lg p-8 text-center">
+          <LogIn className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">Authentication Required</h2>
+          <p className="text-gray-600 mb-6">
+            {authError || "Please log in to view and manage your tickets for resale."}
+          </p>
+          <Button 
+            onClick={() => navigate("/login")}
+            className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 text-white"
+          >
+            Go to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -310,6 +426,7 @@ const ResellScreen = () => {
                     type="number"
                     step="0.01"
                     min="0"
+                    max={selectedTicket.original_price}
                     value={formData.resale_price}
                     onChange={(e) => setFormData({...formData, resale_price: e.target.value})}
                     placeholder="0.00"
@@ -338,7 +455,7 @@ const ResellScreen = () => {
                 <Button 
                   type="submit"
                   className="w-full bg-[#ff4b00] hover:bg-[#ff4b00]/90 text-white"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !currentUserId}
                 >
                   {isSubmitting ? (
                     <>
