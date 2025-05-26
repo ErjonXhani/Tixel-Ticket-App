@@ -1,4 +1,3 @@
-
 import { Outlet, NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
@@ -45,9 +44,9 @@ const AdminLayout = () => {
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center">
             <img 
-              src="/lovable-uploads/a3a02ecd-ccb6-471d-84fa-5f8bfd93e43c.png" 
-              alt="TIXEL Logo" 
-              className="h-16 w-auto object-contain"
+              src="/lovable-uploads/1cb080ac-615b-4ec8-b3b7-e994e305322b.png" 
+              alt="TXL Logo" 
+              className="h-10 w-auto object-contain"
             />
           </div>
           <Button
@@ -108,7 +107,7 @@ const AdminLayout = () => {
           </Button>
           <div className="flex items-center">
             <img 
-              src="/lovable-uploads/67b13937-5637-404a-a2fb-861ee71f0679.png" 
+              src="/lovable-uploads/1cb080ac-615b-4ec8-b3b7-e994e305322b.png" 
               alt="TXL Logo" 
               className="h-8 w-auto object-contain"
             />
