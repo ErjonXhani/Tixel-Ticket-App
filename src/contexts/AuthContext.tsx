@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -11,6 +10,7 @@ interface AuthUser {
   name: string | null;
   email: string | null;
   role: "user" | "admin";
+  phone_number?: string | null;
 }
 
 interface AuthContextType {
@@ -21,6 +21,7 @@ interface AuthContextType {
   isLoading: boolean;
   loading: boolean; // Added for compatibility with App.tsx
   checkAuth: () => Promise<void>; // Added for compatibility with App.tsx
+  refreshUser: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -48,17 +49,31 @@ const cleanupAuthState = () => {
 };
 
 // Helper to transform Supabase User to AuthUser
-const transformUser = (user: User | null): AuthUser | null => {
+const transformUser = async (user: User | null): Promise<AuthUser | null> => {
   if (!user) return null;
   
   // Check if email contains 'admin' to determine role
   const isAdmin = user.email?.includes('admin') || false;
   
+  // Fetch additional user data from the Users table
+  let userData = null;
+  try {
+    const { data } = await supabase
+      .from('Users')
+      .select('full_name, phone_number')
+      .eq('auth_uid', user.id)
+      .single();
+    userData = data;
+  } catch (error) {
+    console.log('Could not fetch user data:', error);
+  }
+  
   return {
     id: user.id,
-    name: user.user_metadata?.name || user.email?.split('@')[0] || null,
+    name: userData?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || null,
     email: user.email,
     role: isAdmin ? "admin" : "user",
+    phone_number: userData?.phone_number || null,
   };
 };
 
@@ -70,12 +85,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Method to refresh user data
+  const refreshUser = async () => {
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (currentSession?.user) {
+        const updatedUser = await transformUser(currentSession.user);
+        setUser(updatedUser);
+      }
+    } catch (error) {
+      console.error("Error refreshing user:", error);
+    }
+  };
+
   // Check auth method to be called on app initialization
   const checkAuth = async () => {
     try {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       setSession(currentSession);
-      setUser(transformUser(currentSession?.user ?? null));
+      const transformedUser = await transformUser(currentSession?.user ?? null);
+      setUser(transformedUser);
       
       // If we're on login/signup/splash screens and already logged in, redirect to home
       if (currentSession && ["/login", "/signup", "/splash", "/onboarding"].includes(location.pathname)) {
@@ -97,10 +126,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
+      async (event, newSession) => {
         console.log("Auth state changed:", event);
         setSession(newSession);
-        setUser(transformUser(newSession?.user ?? null));
+        const transformedUser = await transformUser(newSession?.user ?? null);
+        setUser(transformedUser);
         
         // Handle sign out event
         if (event === 'SIGNED_OUT') {
@@ -273,6 +303,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     isLoading,
     loading: isLoading, // Added for compatibility with App.tsx
     checkAuth, // Added for compatibility with App.tsx
+    refreshUser,
     login,
     signup,
     logout,

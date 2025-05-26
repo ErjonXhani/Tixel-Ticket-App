@@ -54,7 +54,7 @@ const EditProfileDialog = ({ open, onOpenChange }: EditProfileDialogProps) => {
           full_name: data.full_name,
           phone_number: data.phone_number || null,
         })
-        .eq('user_id', user.id);
+        .eq('auth_uid', user.id);
 
       if (error) throw error;
 
