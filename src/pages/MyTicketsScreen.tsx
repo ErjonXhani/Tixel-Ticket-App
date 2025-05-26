@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -21,123 +20,211 @@ interface UserTicket {
 }
 
 const MyTicketsScreen = () => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<UserTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  useEffect(() => {
-    const fetchUserTickets = async () => {
-      if (!user) {
-        setLoading(false);
+  const fetchUserTickets = async (retryAttempt = 0) => {
+    try {
+      console.log("=== FETCH ATTEMPT", retryAttempt + 1, "===");
+      console.log("Auth user:", user);
+      console.log("Auth session:", session);
+      console.log("User ID:", user?.id);
+
+      if (!user?.id) {
+        console.error("No user ID available");
+        setError("Authentication required. Please log in again.");
         return;
       }
 
-      try {
-        console.log("Fetching tickets for user:", user.id);
-        
-        // First get the user_id from the Users table
-        const { data: userData, error: userError } = await supabase
-          .from("Users")
-          .select("user_id")
-          .eq("auth_uid", user.id)
-          .single();
+      // Step 1: Look up user in Users table with detailed logging
+      console.log("Step 1: Looking up user in Users table...");
+      
+      const { data: userData, error: userError, count } = await supabase
+        .from("Users")
+        .select("user_id, username, email")
+        .eq("auth_uid", user.id);
 
-        if (userError || !userData) {
-          console.error("User not found:", userError);
-          setError("User account not found. Please contact support.");
+      console.log("Users query result:", { userData, userError, count });
+      console.log("Number of matching users:", userData?.length || 0);
+
+      if (userError) {
+        console.error("Database error during user lookup:", userError);
+        throw new Error(`Database error: ${userError.message}`);
+      }
+
+      if (!userData || userData.length === 0) {
+        console.error("No user found in Users table for auth_uid:", user.id);
+        
+        // Check if this is a new user that hasn't been synced yet
+        console.log("Checking if user exists in auth.users...");
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+        console.log("Current auth user:", authUser);
+        
+        if (authUser && !userData?.length) {
+          setError("Account setup in progress. Please refresh the page in a few seconds.");
+          // Auto-retry after 3 seconds for new users
+          if (retryAttempt < 2) {
+            console.log("Will retry in 3 seconds...");
+            setTimeout(() => {
+              setRetryCount(prev => prev + 1);
+              fetchUserTickets(retryAttempt + 1);
+            }, 3000);
+          }
           return;
         }
+        
+        setError("User account not found. Please contact support.");
+        return;
+      }
 
-        console.log("Found user_id:", userData.user_id);
+      const userRecord = userData[0];
+      console.log("Found user record:", userRecord);
 
-        // Get paid transactions for this user with complete ticket and event information
-        const { data: transactionsData, error: transactionsError } = await supabase
-          .from("Transactions")
-          .select(`
-            total_amount,
+      // Step 2: Fetch transactions with comprehensive error handling
+      console.log("Step 2: Fetching paid transactions...");
+      
+      const { data: transactionsData, error: transactionsError } = await supabase
+        .from("Transactions")
+        .select(`
+          total_amount,
+          ticket_id,
+          buyer_id,
+          payment_status,
+          "Tickets"!inner(
             ticket_id,
-            "Tickets"!inner(
-              ticket_id,
-              event_id,
-              sector_id,
-              ticket_type,
-              status,
-              "Events"!inner(
-                title,
-                event_date,
-                "Venues"!inner(name)
-              ),
-              "Sectors"!inner(sector_name)
-            )
-          `)
-          .eq("buyer_id", userData.user_id)
-          .eq("payment_status", "Paid")
-          .not("ticket_id", "is", null);
+            event_id,
+            sector_id,
+            ticket_type,
+            status,
+            owner_id,
+            "Events"!inner(
+              title,
+              event_date,
+              "Venues"!inner(name)
+            ),
+            "Sectors"!inner(sector_name)
+          )
+        `)
+        .eq("buyer_id", userRecord.user_id)
+        .eq("payment_status", "Paid")
+        .not("ticket_id", "is", null);
 
-        if (transactionsError) {
-          console.error("Error fetching transactions:", transactionsError);
-          throw transactionsError;
-        }
+      console.log("Transactions query result:", { transactionsData, transactionsError });
 
-        console.log("Transactions data:", transactionsData);
+      if (transactionsError) {
+        console.error("Error fetching transactions:", transactionsError);
+        throw new Error(`Failed to fetch tickets: ${transactionsError.message}`);
+      }
 
-        // Transform the data to our interface
-        const transformedTickets: UserTicket[] = transactionsData?.map(transaction => {
+      console.log("Raw transactions data:", transactionsData);
+      console.log("Number of transactions found:", transactionsData?.length || 0);
+
+      // Step 3: Transform data with validation
+      const transformedTickets: UserTicket[] = [];
+      
+      if (transactionsData && transactionsData.length > 0) {
+        transactionsData.forEach((transaction, index) => {
+          console.log(`Processing transaction ${index + 1}:`, transaction);
+          
           const ticket = transaction.Tickets;
-          return {
+          if (!ticket) {
+            console.warn(`Transaction ${transaction.ticket_id} has no ticket data`);
+            return;
+          }
+
+          const event = ticket.Events;
+          const venue = event?.Venues;
+          const sector = ticket.Sectors;
+
+          console.log(`Ticket ${ticket.ticket_id} details:`, {
+            event: event?.title,
+            venue: venue?.name,
+            sector: sector?.sector_name,
+            status: ticket.status,
+            price: transaction.total_amount
+          });
+
+          transformedTickets.push({
             ticket_id: ticket.ticket_id,
             event_id: ticket.event_id,
             sector_id: ticket.sector_id,
             ticket_type: ticket.ticket_type || "General",
             status: ticket.status,
-            event_title: ticket.Events?.title || "Unknown Event",
-            event_date: ticket.Events?.event_date || "",
-            venue_name: ticket.Events?.Venues?.name || "Unknown Venue",
-            sector_name: ticket.Sectors?.sector_name || "Unknown Sector",
+            event_title: event?.title || "Unknown Event",
+            event_date: event?.event_date || "",
+            venue_name: venue?.name || "Unknown Venue",
+            sector_name: sector?.sector_name || "Unknown Sector",
             original_price: transaction.total_amount || 0
-          };
-        }) || [];
-
-        console.log("Transformed tickets:", transformedTickets);
-        setTickets(transformedTickets);
-
-      } catch (err: any) {
-        console.error("Error loading tickets:", err);
-        setError("Failed to load your tickets. Please try again.");
-        toast.error("Failed to load your tickets");
-      } finally {
-        setLoading(false);
+          });
+        });
       }
-    };
 
-    fetchUserTickets();
-  }, [user]);
+      console.log("Final transformed tickets:", transformedTickets);
+      console.log("Total tickets to display:", transformedTickets.length);
 
-  const formatEventDate = (dateString: string) => {
-    if (!dateString) return "TBD";
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("en-US", { 
-        month: "short", 
-        day: "numeric", 
-        year: "numeric" 
-      });
-    } catch (e) {
-      return "TBD";
+      setTickets(transformedTickets);
+      setError(null); // Clear any previous errors
+
+    } catch (err: any) {
+      console.error("=== ERROR IN FETCH TICKETS ===");
+      console.error("Error type:", typeof err);
+      console.error("Error message:", err.message);
+      console.error("Full error:", err);
+      console.error("Stack trace:", err.stack);
+      
+      const errorMessage = err.message || "Failed to load your tickets. Please try again.";
+      setError(errorMessage);
+      toast.error(errorMessage);
+      
+      // Auto-retry for network errors
+      if (retryAttempt < 1 && (err.message?.includes('network') || err.message?.includes('timeout'))) {
+        console.log("Network error detected, will retry in 2 seconds...");
+        setTimeout(() => {
+          setRetryCount(prev => prev + 1);
+          fetchUserTickets(retryAttempt + 1);
+        }, 2000);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Owned":
-        return "bg-green-100 text-green-800";
-      case "Reserved":
-        return "bg-blue-100 text-blue-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+  useEffect(() => {
+    console.log("=== MY TICKETS SCREEN MOUNTED ===");
+    console.log("Initial auth state:", { user: !!user, userId: user?.id, session: !!session });
+    
+    if (!user) {
+      console.log("No user, setting loading to false");
+      setLoading(false);
+      return;
     }
+
+    // Reset state and fetch tickets
+    setError(null);
+    setLoading(true);
+    setRetryCount(0);
+    fetchUserTickets();
+  }, [user, session]);
+
+  // Monitor auth state changes
+  useEffect(() => {
+    console.log("Auth state changed:", { 
+      hasUser: !!user, 
+      userId: user?.id, 
+      hasSession: !!session 
+    });
+  }, [user, session]);
+
+  const handleRetry = () => {
+    console.log("Manual retry triggered");
+    setError(null);
+    setLoading(true);
+    setRetryCount(prev => prev + 1);
+    fetchUserTickets(retryCount);
   };
 
   // Show login prompt if not authenticated
@@ -162,32 +249,49 @@ const MyTicketsScreen = () => {
     );
   }
 
-  // Show error state
+  // Show error state with better messaging
   if (error) {
     return (
       <div className="p-6 pb-20">
         <h1 className="text-2xl font-bold mb-6">My Tickets</h1>
         <div className="bg-red-50 rounded-lg p-8 text-center">
-          <h2 className="text-xl font-semibold text-red-700 mb-2">Error Loading Tickets</h2>
+          <h2 className="text-xl font-semibold text-red-700 mb-2">
+            {error.includes("setup in progress") ? "Loading Account" : "Error Loading Tickets"}
+          </h2>
           <p className="text-red-600 mb-6">{error}</p>
+          {retryCount < 3 && (
+            <Button 
+              onClick={handleRetry}
+              className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 text-white mr-4"
+              disabled={loading}
+            >
+              {loading ? "Retrying..." : "Try Again"}
+            </Button>
+          )}
           <Button 
             onClick={() => window.location.reload()}
-            className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 text-white"
+            variant="outline"
+            className="border-[#ff4b00] text-[#ff4b00] hover:bg-[#ff4b00] hover:text-white"
           >
-            Try Again
+            Refresh Page
           </Button>
         </div>
       </div>
     );
   }
 
-  // Show loading state
+  // Show loading state with retry info
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-[#ff4b00] rounded-full border-t-transparent animate-spin"></div>
-        <div className="ml-4 text-gray-600">
-          <p className="text-sm">Loading your tickets...</p>
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-[#ff4b00] rounded-full border-t-transparent animate-spin mx-auto mb-4"></div>
+          <div className="text-gray-600">
+            <p className="text-sm">Loading your tickets...</p>
+            {retryCount > 0 && (
+              <p className="text-xs text-gray-500 mt-1">Attempt {retryCount + 1}</p>
+            )}
+          </div>
         </div>
       </div>
     );
