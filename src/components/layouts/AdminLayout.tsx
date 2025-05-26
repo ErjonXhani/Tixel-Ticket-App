@@ -47,7 +47,7 @@ const AdminLayout = () => {
             <img 
               src="/lovable-uploads/a3a02ecd-ccb6-471d-84fa-5f8bfd93e43c.png" 
               alt="TIXEL Logo" 
-              className="h-12 w-auto object-contain"
+              className="h-16 w-auto object-contain"
             />
           </div>
           <Button
