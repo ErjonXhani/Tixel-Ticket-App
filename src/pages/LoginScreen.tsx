@@ -118,20 +118,6 @@ const LoginScreen = () => {
         </div>
       </div>
       
-      {/* Admin login shortcut (for demo) */}
-      {isMobile && (
-        <div className="mt-8 text-center text-xs text-gray-400">
-          <button 
-            onClick={() => {
-              setEmail("admin@tixel.com");
-              setPassword("admin123");
-            }}
-            className="hover:underline"
-          >
-            Demo: Use Admin Credentials
-          </button>
-        </div>
-      )}
     </div>
   );
 };
