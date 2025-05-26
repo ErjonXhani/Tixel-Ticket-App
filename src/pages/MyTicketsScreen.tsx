@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,36 +57,72 @@ const formatEventDate = (dateString: string) => {
 };
 
 const MyTicketsScreen = () => {
-  const { user, session } = useAuth();
+  const { user } = useAuth(); // Removed session from destructuring to avoid dependency issues
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<UserTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
+  
+  // Refs to prevent concurrent fetches and track component mount state
+  const isFetchingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef(true);
+  const lastFetchTimeRef = useRef(0);
 
-  const fetchUserTickets = async (retryAttempt = 0) => {
+  const fetchUserTickets = async () => {
+    // Prevent concurrent fetches
+    if (isFetchingRef.current) {
+      console.log("Fetch already in progress, skipping...");
+      return;
+    }
+
+    // Debounce: prevent rapid successive calls
+    const now = Date.now();
+    if (now - lastFetchTimeRef.current < 1000) {
+      console.log("Debouncing: too soon since last fetch");
+      return;
+    }
+    lastFetchTimeRef.current = now;
+
+    // Cancel any existing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     try {
-      console.log("=== FETCH ATTEMPT", retryAttempt + 1, "===");
-      console.log("Auth user:", user);
-      console.log("Auth session:", session);
+      isFetchingRef.current = true;
+      console.log("=== STARTING FETCH USER TICKETS ===");
       console.log("User ID:", user?.id);
 
       if (!user?.id) {
         console.error("No user ID available");
-        setError("Authentication required. Please log in again.");
+        if (isMountedRef.current) {
+          setError("Authentication required. Please log in again.");
+          setLoading(false);
+        }
         return;
       }
 
-      // Step 1: Look up user in Users table with detailed logging
+      // Check if request was cancelled
+      if (signal.aborted) return;
+
+      // Step 1: Look up user in Users table
       console.log("Step 1: Looking up user in Users table...");
       
-      const { data: userData, error: userError, count } = await supabase
+      const { data: userData, error: userError } = await supabase
         .from("Users")
         .select("user_id, username, email")
-        .eq("auth_uid", user.id);
+        .eq("auth_uid", user.id)
+        .abortSignal(signal);
 
-      console.log("Users query result:", { userData, userError, count });
-      console.log("Number of matching users:", userData?.length || 0);
+      // Check if request was cancelled
+      if (signal.aborted) return;
+
+      console.log("Users query result:", { userData, userError });
 
       if (userError) {
         console.error("Database error during user lookup:", userError);
@@ -94,33 +131,17 @@ const MyTicketsScreen = () => {
 
       if (!userData || userData.length === 0) {
         console.error("No user found in Users table for auth_uid:", user.id);
-        
-        // Check if this is a new user that hasn't been synced yet
-        console.log("Checking if user exists in auth.users...");
-        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-        console.log("Current auth user:", authUser);
-        
-        if (authUser && !userData?.length) {
+        if (isMountedRef.current) {
           setError("Account setup in progress. Please refresh the page in a few seconds.");
-          // Auto-retry after 3 seconds for new users
-          if (retryAttempt < 2) {
-            console.log("Will retry in 3 seconds...");
-            setTimeout(() => {
-              setRetryCount(prev => prev + 1);
-              fetchUserTickets(retryAttempt + 1);
-            }, 3000);
-          }
-          return;
+          setLoading(false);
         }
-        
-        setError("User account not found. Please contact support.");
         return;
       }
 
       const userRecord = userData[0];
       console.log("Found user record:", userRecord);
 
-      // Step 2: Fetch transactions with comprehensive error handling
+      // Step 2: Fetch transactions
       console.log("Step 2: Fetching paid transactions...");
       
       const { data: transactionsData, error: transactionsError } = await supabase
@@ -147,7 +168,11 @@ const MyTicketsScreen = () => {
         `)
         .eq("buyer_id", userRecord.user_id)
         .eq("payment_status", "Paid")
-        .not("ticket_id", "is", null);
+        .not("ticket_id", "is", null)
+        .abortSignal(signal);
+
+      // Check if request was cancelled
+      if (signal.aborted) return;
 
       console.log("Transactions query result:", { transactionsData, transactionsError });
 
@@ -156,10 +181,9 @@ const MyTicketsScreen = () => {
         throw new Error(`Failed to fetch tickets: ${transactionsError.message}`);
       }
 
-      console.log("Raw transactions data:", transactionsData);
       console.log("Number of transactions found:", transactionsData?.length || 0);
 
-      // Step 3: Transform data with validation
+      // Step 3: Transform data
       const transformedTickets: UserTicket[] = [];
       
       if (transactionsData && transactionsData.length > 0) {
@@ -175,14 +199,6 @@ const MyTicketsScreen = () => {
           const event = ticket.Events;
           const venue = event?.Venues;
           const sector = ticket.Sectors;
-
-          console.log(`Ticket ${ticket.ticket_id} details:`, {
-            event: event?.title,
-            venue: venue?.name,
-            sector: sector?.sector_name,
-            status: ticket.status,
-            price: transaction.total_amount
-          });
 
           transformedTickets.push({
             ticket_id: ticket.ticket_id,
@@ -200,39 +216,41 @@ const MyTicketsScreen = () => {
       }
 
       console.log("Final transformed tickets:", transformedTickets);
-      console.log("Total tickets to display:", transformedTickets.length);
 
-      setTickets(transformedTickets);
-      setError(null); // Clear any previous errors
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        setTickets(transformedTickets);
+        setError(null);
+      }
 
     } catch (err: any) {
+      // Don't handle errors if request was cancelled
+      if (signal.aborted) return;
+      
       console.error("=== ERROR IN FETCH TICKETS ===");
-      console.error("Error type:", typeof err);
       console.error("Error message:", err.message);
       console.error("Full error:", err);
-      console.error("Stack trace:", err.stack);
       
       const errorMessage = err.message || "Failed to load your tickets. Please try again.";
-      setError(errorMessage);
-      toast.error(errorMessage);
       
-      // Auto-retry for network errors
-      if (retryAttempt < 1 && (err.message?.includes('network') || err.message?.includes('timeout'))) {
-        console.log("Network error detected, will retry in 2 seconds...");
-        setTimeout(() => {
-          setRetryCount(prev => prev + 1);
-          fetchUserTickets(retryAttempt + 1);
-        }, 2000);
+      if (isMountedRef.current) {
+        setError(errorMessage);
+        toast.error(errorMessage);
       }
     } finally {
-      setLoading(false);
+      isFetchingRef.current = false;
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     console.log("=== MY TICKETS SCREEN MOUNTED ===");
-    console.log("Initial auth state:", { user: !!user, userId: user?.id, session: !!session });
+    console.log("User state:", { hasUser: !!user, userId: user?.id });
     
+    isMountedRef.current = true;
+
     if (!user) {
       console.log("No user, setting loading to false");
       setLoading(false);
@@ -242,25 +260,23 @@ const MyTicketsScreen = () => {
     // Reset state and fetch tickets
     setError(null);
     setLoading(true);
-    setRetryCount(0);
     fetchUserTickets();
-  }, [user, session]);
 
-  // Monitor auth state changes
-  useEffect(() => {
-    console.log("Auth state changed:", { 
-      hasUser: !!user, 
-      userId: user?.id, 
-      hasSession: !!session 
-    });
-  }, [user, session]);
+    // Cleanup function
+    return () => {
+      console.log("MyTicketsScreen unmounting - cancelling requests");
+      isMountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [user?.id]); // Only depend on user.id, not the entire user or session object
 
   const handleRetry = () => {
     console.log("Manual retry triggered");
     setError(null);
     setLoading(true);
-    setRetryCount(prev => prev + 1);
-    fetchUserTickets(retryCount);
+    fetchUserTickets();
   };
 
   // Show login prompt if not authenticated
@@ -285,7 +301,7 @@ const MyTicketsScreen = () => {
     );
   }
 
-  // Show error state with better messaging
+  // Show error state
   if (error) {
     return (
       <div className="p-6 pb-20">
@@ -295,15 +311,13 @@ const MyTicketsScreen = () => {
             {error.includes("setup in progress") ? "Loading Account" : "Error Loading Tickets"}
           </h2>
           <p className="text-red-600 mb-6">{error}</p>
-          {retryCount < 3 && (
-            <Button 
-              onClick={handleRetry}
-              className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 text-white mr-4"
-              disabled={loading}
-            >
-              {loading ? "Retrying..." : "Try Again"}
-            </Button>
-          )}
+          <Button 
+            onClick={handleRetry}
+            className="bg-[#ff4b00] hover:bg-[#ff4b00]/90 text-white mr-4"
+            disabled={loading}
+          >
+            {loading ? "Retrying..." : "Try Again"}
+          </Button>
           <Button 
             onClick={() => window.location.reload()}
             variant="outline"
@@ -316,7 +330,7 @@ const MyTicketsScreen = () => {
     );
   }
 
-  // Show loading state with retry info
+  // Show loading state
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -324,9 +338,6 @@ const MyTicketsScreen = () => {
           <div className="w-12 h-12 border-4 border-[#ff4b00] rounded-full border-t-transparent animate-spin mx-auto mb-4"></div>
           <div className="text-gray-600">
             <p className="text-sm">Loading your tickets...</p>
-            {retryCount > 0 && (
-              <p className="text-xs text-gray-500 mt-1">Attempt {retryCount + 1}</p>
-            )}
           </div>
         </div>
       </div>
