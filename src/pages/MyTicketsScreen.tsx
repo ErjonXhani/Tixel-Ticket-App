@@ -19,6 +19,42 @@ interface UserTicket {
   original_price: number;
 }
 
+// Utility function to get status color classes
+const getStatusColor = (status: string) => {
+  switch (status.toLowerCase()) {
+    case 'available':
+      return 'bg-green-100 text-green-800';
+    case 'sold':
+      return 'bg-blue-100 text-blue-800';
+    case 'reserved':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'unavailable':
+      return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+};
+
+// Utility function to format event date
+const formatEventDate = (dateString: string) => {
+  if (!dateString) return 'Date TBD';
+  
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid Date';
+  }
+};
+
 const MyTicketsScreen = () => {
   const { user, session } = useAuth();
   const navigate = useNavigate();
