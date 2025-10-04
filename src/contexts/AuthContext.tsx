@@ -125,20 +125,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Clean up existing auth state
       cleanupAuthState();
       
-      // For demo purposes, handle manually for admin login
-      if (email === "admin@tixel.com" && password === "admin123") {
-        // Create a mock session for admin user
-        const mockUser = {
-          id: "admin-user-id",
-          name: "Admin",
-          email: "admin@tixel.com",
-          role: "admin" as const,
-        };
-        setUser(mockUser);
-        toast.success(`Welcome back, Admin!`);
-        navigate("/admin");
-        return true;
-      }
+      
       
       // Regular Supabase authentication for non-admin users
       const { data, error } = await supabase.auth.signInWithPassword({
