@@ -367,7 +367,20 @@ const MyTicketsScreen = () => {
           {tickets.map((ticket) => (
             <div 
               key={ticket.ticket_id}
-              className="border rounded-lg p-4 bg-white shadow-sm"
+              className="border rounded-lg p-4 bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => {
+                const params = new URLSearchParams({
+                  id: ticket.ticket_id.toString(),
+                  title: ticket.event_title,
+                  date: ticket.event_date,
+                  venue: ticket.venue_name,
+                  sector: ticket.sector_name,
+                  type: ticket.ticket_type,
+                  status: ticket.status,
+                  price: ticket.original_price.toFixed(2),
+                });
+                navigate(`/ticket-details?${params.toString()}`);
+              }}
             >
               <div className="flex justify-between items-start mb-3">
                 <h3 className="font-semibold text-lg text-gray-900">{ticket.event_title}</h3>

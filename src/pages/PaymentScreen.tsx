@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, CreditCard, Check } from "lucide-react";
+import { ArrowLeft, CreditCard, Check, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +38,7 @@ const PaymentScreen = () => {
   const [cardName, setCardName] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [cvv, setCvv] = useState("");
+  const [showCvv, setShowCvv] = useState(true); // CVV visible by default
   const [isProcessing, setIsProcessing] = useState(false);
   const [transactionId, setTransactionId] = useState<number | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
@@ -405,6 +406,38 @@ const PaymentScreen = () => {
       return value;
     }
   };
+
+  // Format expiry date as MM/YY
+  const formatExpiryDate = (value: string) => {
+    // Remove non-digits
+    const digits = value.replace(/\D/g, "");
+    
+    // Limit to 4 digits (MMYY)
+    const limited = digits.substring(0, 4);
+    
+    if (limited.length === 0) return "";
+    
+    // Extract month
+    let month = limited.substring(0, 2);
+    
+    // Validate and fix month if > 12
+    if (month.length === 2) {
+      const monthNum = parseInt(month, 10);
+      if (monthNum > 12) {
+        month = "12";
+      } else if (monthNum === 0) {
+        month = "01";
+      }
+    }
+    
+    // Add year if present
+    if (limited.length <= 2) {
+      return month;
+    } else {
+      const year = limited.substring(2, 4);
+      return `${month}/${year}`;
+    }
+  };
   
   if (isLoading) {
     return (
@@ -534,7 +567,7 @@ const PaymentScreen = () => {
               <Input
                 id="expiry"
                 value={expiryDate}
-                onChange={(e) => setExpiryDate(e.target.value)}
+                onChange={(e) => setExpiryDate(formatExpiryDate(e.target.value))}
                 placeholder="MM/YY"
                 maxLength={5}
                 className="w-full"
@@ -545,15 +578,27 @@ const PaymentScreen = () => {
               <label htmlFor="cvv" className="block text-sm font-medium mb-1">
                 CVV
               </label>
-              <Input
-                id="cvv"
-                value={cvv}
-                onChange={(e) => setCvv(e.target.value)}
-                placeholder="123"
-                maxLength={4}
-                type="password"
-                className="w-full"
-              />
+              <div className="relative">
+                <Input
+                  id="cvv"
+                  value={cvv}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "");
+                    setCvv(digits);
+                  }}
+                  placeholder="123"
+                  maxLength={4}
+                  type={showCvv ? "text" : "password"}
+                  className="w-full pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCvv(!showCvv)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+                >
+                  {showCvv ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
           </div>
           

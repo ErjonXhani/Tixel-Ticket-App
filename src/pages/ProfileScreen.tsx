@@ -58,17 +58,26 @@ const ProfileScreen = () => {
         <h2 className="text-lg font-bold mb-3">Settings</h2>
         
         <div className="bg-white rounded-lg shadow-sm divide-y">
-          <button className="w-full py-3 px-4 flex justify-between items-center">
+          <button 
+            className="w-full py-3 px-4 flex justify-between items-center"
+            onClick={() => window.location.href = '/edit-profile'}
+          >
             <span>Edit Profile</span>
             <ChevronRight className="w-5 h-5 text-gray-400" />
           </button>
           
-          <button className="w-full py-3 px-4 flex justify-between items-center">
+          <button 
+            className="w-full py-3 px-4 flex justify-between items-center"
+            onClick={() => window.location.href = '/notifications'}
+          >
             <span>Notifications</span>
             <ChevronRight className="w-5 h-5 text-gray-400" />
           </button>
           
-          <button className="w-full py-3 px-4 flex justify-between items-center">
+          <button 
+            className="w-full py-3 px-4 flex justify-between items-center"
+            onClick={() => window.location.href = '/payment-methods'}
+          >
             <span>Payment Methods</span>
             <ChevronRight className="w-5 h-5 text-gray-400" />
           </button>

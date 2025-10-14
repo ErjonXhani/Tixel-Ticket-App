@@ -16,6 +16,10 @@ import PaymentScreen from "./pages/PaymentScreen";
 import OnboardingScreen from "./pages/OnboardingScreen";
 import ProfileScreen from "./pages/ProfileScreen";
 import MyTicketsScreen from "./pages/MyTicketsScreen";
+import TicketDetailsScreen from "./pages/TicketDetailsScreen";
+import EditProfileScreen from "./pages/EditProfileScreen";
+import NotificationsScreen from "./pages/NotificationsScreen";
+import PaymentMethodsScreen from "./pages/PaymentMethodsScreen";
 
 // Admin components
 import AdminDashboard from "./pages/AdminDashboard";
@@ -65,6 +69,10 @@ function App() {
           <Route path="/events/:id" element={user ? <EventDetailsScreen /> : <Navigate to="/login" />} />
           <Route path="/profile" element={user ? <ProfileScreen /> : <Navigate to="/login" />} />
           <Route path="/my-tickets" element={user ? <MyTicketsScreen /> : <Navigate to="/login" />} />
+          <Route path="/ticket-details" element={user ? <TicketDetailsScreen /> : <Navigate to="/login" />} />
+          <Route path="/edit-profile" element={user ? <EditProfileScreen /> : <Navigate to="/login" />} />
+          <Route path="/notifications" element={user ? <NotificationsScreen /> : <Navigate to="/login" />} />
+          <Route path="/payment-methods" element={user ? <PaymentMethodsScreen /> : <Navigate to="/login" />} />
         </Route>
         
         {/* Admin routes with Admin Layout */}

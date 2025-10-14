@@ -6,16 +6,20 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { supabase } from "@/integrations/supabase/client";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailError, setEmailError] = useState("");
   const { login } = useAuth();
   const isMobile = useIsMobile();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    setEmailError(""); // Clear previous errors
     
     if (!email || !password) {
       toast.error("Please enter both email and password");
@@ -25,7 +29,19 @@ const LoginScreen = () => {
     setIsSubmitting(true);
     
     try {
-      await login(email, password);
+      const success = await login(email, password);
+      if (!success) {
+        // Check if email exists in database
+        const { data } = await supabase
+          .from("Users")
+          .select("email")
+          .eq("email", email)
+          .maybeSingle();
+        
+        if (!data) {
+          setEmailError("This email is not registered. Please sign up first.");
+        }
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -57,10 +73,16 @@ const LoginScreen = () => {
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setEmailError(""); // Clear error when typing
+                }}
                 required
                 className="w-full"
               />
+              {emailError && (
+                <p className="text-sm text-red-600 mt-1">{emailError}</p>
+              )}
             </div>
             
             <div className="space-y-2">
