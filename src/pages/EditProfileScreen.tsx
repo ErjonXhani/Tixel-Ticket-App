@@ -23,9 +23,12 @@ const EditProfileScreen = () => {
   useEffect(() => {
     const fetchUserProfile = async () => {
       if (!user?.id) {
+        console.log("EditProfile: No user ID, redirecting to login");
         navigate("/login");
         return;
       }
+
+      console.log("EditProfile: Fetching profile for user:", user.id);
 
       try {
         const { data, error } = await supabase
@@ -34,9 +37,13 @@ const EditProfileScreen = () => {
           .eq("auth_uid", user.id)
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error("EditProfile: Error fetching profile:", error);
+          throw error;
+        }
 
         if (data) {
+          console.log("EditProfile: Profile data loaded:", data);
           setFormData({
             fullName: data.full_name || "",
             email: data.email || "",
@@ -45,7 +52,7 @@ const EditProfileScreen = () => {
           });
         }
       } catch (error) {
-        console.error("Error fetching profile:", error);
+        console.error("EditProfile: Failed to fetch profile:", error);
         toast.error("Failed to load profile");
       } finally {
         setLoading(false);
@@ -56,7 +63,11 @@ const EditProfileScreen = () => {
   }, [user, navigate]);
 
   const handleSave = async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      console.log("EditProfile: No user ID for save");
+      toast.error("User session not found");
+      return;
+    }
     
     // Validate: username cannot be empty
     if (!formData.username.trim()) {
@@ -64,24 +75,34 @@ const EditProfileScreen = () => {
       return;
     }
 
+    console.log("EditProfile: Saving profile updates:", {
+      fullName: formData.fullName,
+      phoneNumber: formData.phoneNumber,
+      username: formData.username,
+    });
+
     setSaving(true);
     try {
       const { error } = await supabase
         .from("Users")
         .update({
-          full_name: formData.fullName.trim() || null, // Allow clearing name
+          full_name: formData.fullName.trim() || null,
           phone_number: formData.phoneNumber.trim() || null,
           username: formData.username.trim(),
         })
         .eq("auth_uid", user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error("EditProfile: Save error:", error);
+        throw error;
+      }
 
+      console.log("EditProfile: Profile updated successfully");
       toast.success("Profile updated successfully!");
       navigate("/profile");
     } catch (error) {
-      console.error("Error updating profile:", error);
-      toast.error("Failed to update profile");
+      console.error("EditProfile: Failed to update profile:", error);
+      toast.error("Failed to update profile. Please try again.");
     } finally {
       setSaving(false);
     }

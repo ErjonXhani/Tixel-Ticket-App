@@ -29,25 +29,34 @@ const LoginScreen = () => {
     setIsSubmitting(true);
     
     try {
-      // First check if email exists in Users table
-      const { data: userData } = await supabase
-        .from("Users")
-        .select("email")
-        .eq("email", email)
-        .maybeSingle();
+      // Attempt authentication
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      });
       
-      if (!userData) {
-        setEmailError("This email is not registered. Please sign up first.");
-        setIsSubmitting(false);
+      if (authError) {
+        console.error("Auth error:", authError);
+        
+        // Provide user-friendly error messages based on auth error
+        if (authError.message.includes("Invalid login credentials")) {
+          // Generic message for security (doesn't leak whether email exists)
+          toast.error("Invalid email or password. Please try again.");
+        } else if (authError.message.includes("Email not confirmed")) {
+          toast.error("Please confirm your email before logging in.");
+        } else if (authError.message.includes("User not found")) {
+          setEmailError("This email is not registered. Please sign up first.");
+        } else {
+          toast.error(authError.message || "Login failed. Please try again.");
+        }
         return;
       }
       
-      // Email exists, proceed with authentication
-      const success = await login(email, password);
-      if (!success) {
-        toast.error("Invalid credentials. Please try again.");
-      }
+      // Success - AuthContext will handle the redirect
+      toast.success("Login successful!");
+      
     } catch (error) {
+      console.error("Login error:", error);
       toast.error("An error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
