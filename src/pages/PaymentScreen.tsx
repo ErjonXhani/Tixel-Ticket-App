@@ -39,6 +39,7 @@ const PaymentScreen = () => {
   const [expiryDate, setExpiryDate] = useState("");
   const [cvv, setCvv] = useState("");
   const [showCvv, setShowCvv] = useState(true); // CVV visible by default
+  const [saveCard, setSaveCard] = useState(true); // Save card by default
   const [isProcessing, setIsProcessing] = useState(false);
   const [transactionId, setTransactionId] = useState<number | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
@@ -315,6 +316,14 @@ const PaymentScreen = () => {
     
   }, [isLoading, eventId, sectorId, quantity, price, validatedUserId, transactionId, hasValidated]);
   
+  const detectCardBrand = (number: string) => {
+    const cleaned = number.replace(/\s/g, "");
+    if (cleaned.startsWith("4")) return "Visa";
+    if (cleaned.startsWith("5")) return "Mastercard";
+    if (cleaned.startsWith("3")) return "Amex";
+    return "Card";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -372,6 +381,30 @@ const PaymentScreen = () => {
       }
       
       console.log("Payment: Transaction updated to Paid successfully");
+      
+      // If saveCard is checked, save card metadata to PaymentMethods
+      if (saveCard && validatedUserId) {
+        const cleaned = cardNumber.replace(/\s/g, "");
+        const last4 = cleaned.slice(-4);
+        const [month, year] = expiryDate.split("/");
+        
+        const { error: saveError } = await supabase
+          .from("PaymentMethods")
+          .insert({
+            user_id: validatedUserId,
+            brand: detectCardBrand(cardNumber),
+            last4,
+            exp_month: month,
+            exp_year: year,
+            cardholder_name: cardName,
+            is_default: true,
+          });
+        
+        if (saveError) {
+          console.error("Error saving card:", saveError);
+          // Don't fail the payment if card save fails
+        }
+      }
       
       // Success!
       setPaymentSuccess(true);
@@ -600,6 +633,19 @@ const PaymentScreen = () => {
                 </button>
               </div>
             </div>
+          </div>
+          
+          <div className="flex items-center space-x-2 py-3">
+            <input
+              type="checkbox"
+              id="saveCard"
+              checked={saveCard}
+              onChange={(e) => setSaveCard(e.target.checked)}
+              className="w-4 h-4 text-[#ff4b00] rounded focus:ring-[#ff4b00]"
+            />
+            <label htmlFor="saveCard" className="text-sm font-medium">
+              Save this card for future payments
+            </label>
           </div>
           
           <Button

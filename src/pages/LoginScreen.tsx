@@ -29,19 +29,26 @@ const LoginScreen = () => {
     setIsSubmitting(true);
     
     try {
+      // First check if email exists in Users table
+      const { data: userData } = await supabase
+        .from("Users")
+        .select("email")
+        .eq("email", email)
+        .maybeSingle();
+      
+      if (!userData) {
+        setEmailError("This email is not registered. Please sign up first.");
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Email exists, proceed with authentication
       const success = await login(email, password);
       if (!success) {
-        // Check if email exists in database
-        const { data } = await supabase
-          .from("Users")
-          .select("email")
-          .eq("email", email)
-          .maybeSingle();
-        
-        if (!data) {
-          setEmailError("This email is not registered. Please sign up first.");
-        }
+        toast.error("Invalid credentials. Please try again.");
       }
+    } catch (error) {
+      toast.error("An error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

@@ -1,29 +1,28 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, CreditCard, Plus, Trash2, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, CreditCard, Plus, Trash2, Eye, EyeOff, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SavedCard {
   id: string;
   brand: string;
-  lastFour: string;
-  expiryMonth: string;
-  expiryYear: string;
+  last4: string;
+  exp_month: string;
+  exp_year: string;
+  cardholder_name?: string;
+  label?: string;
+  is_default: boolean;
 }
 
 const PaymentMethodsScreen = () => {
   const navigate = useNavigate();
-  const [savedCards, setSavedCards] = useState<SavedCard[]>([
-    {
-      id: "1",
-      brand: "Visa",
-      lastFour: "4242",
-      expiryMonth: "12",
-      expiryYear: "25",
-    },
-  ]);
+  const { user } = useAuth();
+  const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddCard, setShowAddCard] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
   const [cardName, setCardName] = useState("");
@@ -31,6 +30,58 @@ const PaymentMethodsScreen = () => {
   const [cvv, setCvv] = useState("");
   const [showCvv, setShowCvv] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [numericUserId, setNumericUserId] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchNumericUserId();
+  }, [user]);
+
+  useEffect(() => {
+    if (numericUserId) {
+      fetchPaymentMethods();
+    }
+  }, [numericUserId]);
+
+  const fetchNumericUserId = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("Users")
+        .select("user_id")
+        .eq("auth_uid", user.id)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setNumericUserId(data.user_id);
+      }
+    } catch (error) {
+      console.error("Error fetching user ID:", error);
+      toast.error("Failed to load user information");
+    }
+  };
+
+  const fetchPaymentMethods = async () => {
+    if (!numericUserId) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("PaymentMethods")
+        .select("*")
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setSavedCards(data || []);
+    } catch (error) {
+      console.error("Error fetching payment methods:", error);
+      toast.error("Failed to load payment methods");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatCardNumber = (value: string) => {
     const v = value.replace(/\s+/g, "").replace(/[^0-9]/gi, "");
@@ -82,44 +133,80 @@ const PaymentMethodsScreen = () => {
     return "Card";
   };
 
-  const handleAddCard = () => {
-    if (!cardNumber || !cardName || !expiryDate || !cvv) {
+  const handleAddCard = async () => {
+    if (!cardNumber || !cardName || !expiryDate || !cvv || !numericUserId) {
       toast.error("Please fill in all card details");
       return;
     }
 
     setSaving(true);
 
-    // Simulate saving
-    setTimeout(() => {
+    try {
       const cleaned = cardNumber.replace(/\s/g, "");
-      const lastFour = cleaned.slice(-4);
+      const last4 = cleaned.slice(-4);
       const [month, year] = expiryDate.split("/");
 
-      setSavedCards([
-        ...savedCards,
-        {
-          id: Date.now().toString(),
+      const { error } = await supabase
+        .from("PaymentMethods")
+        .insert({
+          user_id: numericUserId,
           brand: detectCardBrand(cardNumber),
-          lastFour,
-          expiryMonth: month,
-          expiryYear: year,
-        },
-      ]);
+          last4,
+          exp_month: month,
+          exp_year: year,
+          cardholder_name: cardName,
+          is_default: savedCards.length === 0, // First card is default
+        });
+
+      if (error) throw error;
 
       setCardNumber("");
       setCardName("");
       setExpiryDate("");
       setCvv("");
       setShowAddCard(false);
-      setSaving(false);
       toast.success("Card added successfully!");
-    }, 1000);
+      fetchPaymentMethods();
+    } catch (error) {
+      console.error("Error adding card:", error);
+      toast.error("Failed to add card");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDeleteCard = (id: string) => {
-    setSavedCards(savedCards.filter((card) => card.id !== id));
-    toast.success("Card removed");
+  const handleDeleteCard = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("PaymentMethods")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      toast.success("Card removed");
+      fetchPaymentMethods();
+    } catch (error) {
+      console.error("Error deleting card:", error);
+      toast.error("Failed to remove card");
+    }
+  };
+
+  const handleSetDefault = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("PaymentMethods")
+        .update({ is_default: true })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      toast.success("Default card updated");
+      fetchPaymentMethods();
+    } catch (error) {
+      console.error("Error setting default:", error);
+      toast.error("Failed to update default card");
+    }
   };
 
   return (
@@ -137,32 +224,61 @@ const PaymentMethodsScreen = () => {
 
       {/* Saved Cards */}
       <div className="space-y-4 mb-6">
-        {savedCards.map((card) => (
-          <div
-            key={card.id}
-            className="bg-white rounded-lg p-4 shadow-sm flex items-center justify-between"
-          >
-            <div className="flex items-center">
-              <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center mr-4">
-                <CreditCard className="w-6 h-6 text-[#ff4b00]" />
-              </div>
-              <div>
-                <p className="font-medium">
-                  {card.brand} •••• {card.lastFour}
-                </p>
-                <p className="text-sm text-gray-500">
-                  Expires {card.expiryMonth}/{card.expiryYear}
-                </p>
+        {loading ? (
+          <p className="text-center text-gray-500">Loading payment methods...</p>
+        ) : savedCards.length === 0 ? (
+          <p className="text-center text-gray-500">No saved cards yet</p>
+        ) : (
+          savedCards.map((card) => (
+            <div
+              key={card.id}
+              className="bg-white rounded-lg p-4 shadow-sm"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center flex-1">
+                  <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center mr-4">
+                    <CreditCard className="w-6 h-6 text-[#ff4b00]" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">
+                        {card.brand} •••• {card.last4}
+                      </p>
+                      {card.is_default && (
+                        <span className="inline-flex items-center gap-1 bg-[#ff4b00]/10 text-[#ff4b00] text-xs px-2 py-0.5 rounded">
+                          <Star className="w-3 h-3 fill-current" />
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Expires {card.exp_month}/{card.exp_year}
+                    </p>
+                    {card.cardholder_name && (
+                      <p className="text-xs text-gray-400">{card.cardholder_name}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!card.is_default && (
+                    <button
+                      onClick={() => handleSetDefault(card.id)}
+                      className="text-[#ff4b00] hover:text-[#ff4b00]/80 text-sm"
+                    >
+                      Set Default
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDeleteCard(card.id)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             </div>
-            <button
-              onClick={() => handleDeleteCard(card.id)}
-              className="text-red-500 hover:text-red-700"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Add Card Button */}

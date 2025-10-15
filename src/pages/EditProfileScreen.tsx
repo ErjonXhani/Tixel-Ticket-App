@@ -57,15 +57,21 @@ const EditProfileScreen = () => {
 
   const handleSave = async () => {
     if (!user?.id) return;
+    
+    // Validate: username cannot be empty
+    if (!formData.username.trim()) {
+      toast.error("Username cannot be empty");
+      return;
+    }
 
     setSaving(true);
     try {
       const { error } = await supabase
         .from("Users")
         .update({
-          full_name: formData.fullName,
-          phone_number: formData.phoneNumber,
-          username: formData.username,
+          full_name: formData.fullName.trim() || null, // Allow clearing name
+          phone_number: formData.phoneNumber.trim() || null,
+          username: formData.username.trim(),
         })
         .eq("auth_uid", user.id);
 
@@ -114,8 +120,9 @@ const EditProfileScreen = () => {
             onChange={(e) =>
               setFormData({ ...formData, fullName: e.target.value })
             }
-            placeholder="John Doe"
+            placeholder="Enter your full name (optional)"
           />
+          <p className="text-xs text-gray-500 mt-1">You can clear this field if you prefer</p>
         </div>
 
         <div>

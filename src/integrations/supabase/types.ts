@@ -129,6 +129,54 @@ export type Database = {
           },
         ]
       }
+      PaymentMethods: {
+        Row: {
+          brand: string
+          cardholder_name: string | null
+          created_at: string | null
+          exp_month: string
+          exp_year: string
+          id: string
+          is_default: boolean | null
+          label: string | null
+          last4: string
+          provider: string | null
+          provider_payment_method_id: string | null
+          updated_at: string | null
+          user_id: number
+        }
+        Insert: {
+          brand: string
+          cardholder_name?: string | null
+          created_at?: string | null
+          exp_month: string
+          exp_year: string
+          id?: string
+          is_default?: boolean | null
+          label?: string | null
+          last4: string
+          provider?: string | null
+          provider_payment_method_id?: string | null
+          updated_at?: string | null
+          user_id: number
+        }
+        Update: {
+          brand?: string
+          cardholder_name?: string | null
+          created_at?: string | null
+          exp_month?: string
+          exp_year?: string
+          id?: string
+          is_default?: boolean | null
+          label?: string | null
+          last4?: string
+          provider?: string | null
+          provider_payment_method_id?: string | null
+          updated_at?: string | null
+          user_id?: number
+        }
+        Relationships: []
+      }
       ResaleListings: {
         Row: {
           created_at: string | null
